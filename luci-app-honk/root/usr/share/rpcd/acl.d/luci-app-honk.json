@@ -3,22 +3,62 @@
 		"description": "Grant access to honk configuration",
 		"read": {
 			"file": {
-				"/etc/honk/config.dae": [ "read" ],
-				"/etc/honk/custom.rules": [ "read" ],
-				"/etc/honk/adblock.list": [ "read" ],
-				"/var/log/honk.log": [ "read" ]
+				"/etc/honk/config.dae": [
+					"read"
+				],
+				"/etc/honk/custom.rules": [
+					"read"
+				],
+				"/etc/honk/adblock.list": [
+					"read"
+				],
+				"/var/log/honk.log": [
+					"read"
+				],
+				"/usr/share/honk/gen_dae.sh": [
+					"exec"
+				],
+				"/usr/share/honk/probe.sh": [
+					"exec"
+				],
+				"/usr/share/honk/update-adblock.sh": [
+					"exec"
+				],
+				"/usr/share/honk/update-subs.sh": [
+					"exec"
+				],
+				"/usr/share/honk/update-geo.sh": [
+					"exec"
+				],
+				"/etc/init.d/honk": [
+					"exec"
+				]
 			},
 			"ubus": {
-				"service": [ "list" ]
+				"service": [
+					"list"
+				]
 			},
-			"uci": [ "honk", "network" ]
+			"uci": [
+				"honk",
+				"network"
+			]
 		},
 		"write": {
 			"file": {
-				"/etc/honk/config.dae": [ "write" ],
-				"/etc/honk/custom.rules": [ "write" ]
+				"/etc/honk/config.dae": [
+					"write"
+				],
+				"/etc/honk/custom.rules": [
+					"write"
+				],
+				"/etc/honk/adblock.list": [
+					"write"
+				]
 			},
-			"uci": [ "honk" ]
+			"uci": [
+				"honk"
+			]
 		}
 	}
 }

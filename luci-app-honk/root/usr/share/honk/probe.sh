@@ -15,13 +15,12 @@ printf '%s\n' "$SITES" | while IFS=' ' read -r key url; do
 	[ -n "$key" ] || continue
 
 	# curl -w 输出总耗时（秒），转成毫秒
-	start="$(date +%s%N 2>/dev/null)"
 	if out="$(curl -sS -o /dev/null -w '%{time_total}' \
 			--connect-timeout 5 --max-time 8 "$url" 2>&1)"; then
 		ms="$(awk -v t="$out" 'BEGIN { printf "%d", t * 1000 }')"
 		echo "$key|ok|$ms"
 	else
-		err="$(printf '%s' "$out" | tr '|' ' ' | cut -c1-60)"
+		err="$(printf '%s' "$out" | tr '|\n' '  ' | cut -c1-60)"
 		echo "$key|fail|$err"
 	fi
 done
