@@ -68,6 +68,13 @@ config group 'proxy'
 	option tolerance '50'
 	option final 'direct'
 
+# 订阅：下载后解析成节点，节点名会带上 tag 前缀
+config subscription 'sample'
+	option enabled '0'
+	option name 'sample'
+	option url ''
+	option tag 'sub'
+
 # 访问控制：按源/目标地址决定走代理还是直连
 config control 'control'
 	option lan_list_mode '0'

@@ -54,6 +54,7 @@ return view.extend({
 		s.tab('routing', _('路由设置'));
 		s.tab('dns', _('DNS'));
 		s.tab('nodes', _('节点与分组'));
+		s.tab('subs', _('订阅'));
 		s.tab('ssid', _('多SSID分流'));
 		s.tab('control', _('访问控制'));
 		s.tab('diversion', _('分流控制'));
@@ -221,6 +222,62 @@ return view.extend({
 		o = nodesSec.option(form.Value, 'uri', _('分享链接'));
 		o.placeholder = 'vless://uuid@host:443?security=tls&sni=host#name';
 		o.rmempty = false;
+
+		/* ================= 订阅 ================= */
+		o = s.taboption('subs', form.DummyValue, '_subs_hint', null);
+		o.rawhtml = true;
+		o.cfgvalue = function() {
+			return E('div', { 'class': 'cbi-value-description' },
+				_('填写订阅地址，点「更新订阅」下载并解析成节点。' +
+				  '支持纯链接列表和 base64 编码的订阅；解析出的节点名会带上面的 tag 前缀，' +
+				  '方便和手填节点区分。'));
+		};
+
+		var subv = s.taboption('subs', form.SectionValue, '_subscriptions', form.GridSection, 'subscription', null);
+		var subsSec = subv.subsection;
+		subsSec.addremove = true;
+		subsSec.sortable = true;
+		subsSec.anonymous = true;
+		subsSec.sectiontitle = function(section_id) {
+			return uci.get('honk', section_id, 'name') || section_id;
+		};
+
+		o = subsSec.option(form.Flag, 'enabled', _('启用'));
+		o.default = '1';
+		o.rmempty = false;
+
+		o = subsSec.option(form.Value, 'name', _('名称'));
+		o.placeholder = '机场A';
+		o.rmempty = false;
+
+		o = subsSec.option(form.Value, 'url', _('订阅地址'));
+		o.placeholder = 'https://example.com/sub?token=xxx';
+		o.datatype = 'url';
+		o.rmempty = false;
+
+		o = subsSec.option(form.Value, 'tag', _('节点名前缀'));
+		o.placeholder = 'sub';
+		o.rmempty = true;
+
+		o = s.taboption('subs', form.Button, '_fetch_subs', _('更新订阅'));
+		o.inputtitle = _('立即更新');
+		o.inputstyle = 'apply';
+		o.onclick = function() {
+			var out = E('pre', {
+				'class': 'cbi-input-textarea',
+				'style': 'height:16em;overflow:auto;white-space:pre-wrap;font-family:monospace;font-size:12px;'
+			}, _('正在更新…'));
+			ui.showModal(_('更新订阅'), [out, E('div', { 'class': 'right' },
+				E('button', { 'class': 'btn', 'click': ui.hideModal }, _('关闭')))]);
+			return uci.save().then(function() {
+				return fs.exec('/usr/share/honk/update-subs.sh');
+			}).then(function(res) {
+				out.textContent = (res.stdout || '') + (res.stderr || '');
+				return uci.load('honk');
+			}).then(function() {
+				out.textContent += '\n\n完成，请刷新页面查看节点。';
+			}).catch(function(e) { out.textContent = String(e); });
+		};
 
 		var gv = s.taboption('nodes', form.SectionValue, '_groups', form.GridSection, 'group', null);
 		var groupsSec = gv.subsection;
