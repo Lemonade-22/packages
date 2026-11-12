@@ -137,6 +137,79 @@ return view.extend({
 			return uci.get('honk', section_id, 'name') || section_id;
 		};
 
+		/* 批量导入：honk 直接吃分享链接，不需要像 sing-box 那样逐字段解析 */
+		nodesSec.renderSectionAdd = function() {
+			var el = form.GridSection.prototype.renderSectionAdd.apply(this, arguments);
+
+			el.appendChild(E('button', {
+				'class': 'cbi-button cbi-button-action',
+				'style': 'margin-left:8px;',
+				'click': ui.createHandlerFn(this, function() {
+					var ta = E('textarea', {
+						'class': 'cbi-input-textarea',
+						'style': 'width:100%;height:14em;font-family:monospace;font-size:12px;',
+						'placeholder': 'vless://uuid@host:443?security=tls&sni=host#hk01\n' +
+						               'hysteria2://pass@host:8443?sni=host#us01'
+					});
+
+					ui.showModal(_('导入分享链接'), [
+						E('p', {}, _('一行一条。节点名取自链接末尾 # 后面的部分，没有就自动编号。')),
+						ta,
+						E('div', { 'class': 'right' }, [
+							E('button', { 'class': 'btn', 'click': ui.hideModal }, _('取消')),
+							' ',
+							E('button', {
+								'class': 'btn cbi-button-action',
+								'click': ui.createHandlerFn(this, function() {
+									var links = String(ta.value || '').split('\n')
+										.map(function(x) { return x.trim(); })
+										.filter(function(x) { return x.length > 0; });
+									if (!links.length)
+										return ui.hideModal();
+
+									var used = {};
+									uci.sections('honk', 'node').forEach(function(n) {
+										if (n.name) used[n.name] = 1;
+									});
+
+									var added = 0, idx = 0;
+									links.forEach(function(link) {
+										var name = '';
+										var h = link.indexOf('#');
+										if (h >= 0) {
+											try { name = decodeURIComponent(link.slice(h + 1)); }
+											catch (e) { name = link.slice(h + 1); }
+										}
+										name = name.replace(/[^\w.-]/g, '').slice(0, 24);
+										if (!name) name = 'node';
+										while (used[name]) name = name.replace(/\d+$/, '') + (++idx);
+										used[name] = 1;
+
+										var sid = uci.add('honk', 'node');
+										uci.set('honk', sid, 'enabled', '1');
+										uci.set('honk', sid, 'name', name);
+										uci.set('honk', sid, 'uri', link);
+										added++;
+									});
+
+									return uci.save()
+										.then(L.bind(this.map.load, this.map))
+										.then(L.bind(this.map.reset, this.map))
+										.then(function() {
+											ui.addNotification(null, E('p', {},
+												_('已导入 %d 个节点').format(added)));
+											ui.hideModal();
+										});
+								})
+							}, _('导入'))
+						])
+					]);
+				})
+			}, _('导入分享链接')));
+
+			return el;
+		};
+
 		o = nodesSec.option(form.Flag, 'enabled', _('启用'));
 		o.default = '1';
 		o.rmempty = false;
