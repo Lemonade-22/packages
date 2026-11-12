@@ -55,6 +55,7 @@ return view.extend({
 		s.tab('dns', _('DNS'));
 		s.tab('nodes', _('节点与分组'));
 		s.tab('subs', _('订阅'));
+		s.tab('picking', _('选优'));
 		s.tab('ssid', _('多SSID分流'));
 		s.tab('control', _('访问控制'));
 		s.tab('diversion', _('分流控制'));
@@ -612,6 +613,132 @@ return view.extend({
 			return fs.write('/etc/honk/adblock.list', '');
 		};
 		o.placeholder = 'doubleclick.net\nads.example.com\ntracker.example.org';
+
+		/* ================= 选优 ================= */
+		/* 内核的 urltest / score 一直在跑，这里只是把结果拿出来看、把选择改掉。
+		   走 honk-api.sh 而不是前端直接 fetch：rpcd 的 acl 只管 fs.exec。 */
+
+		o = s.taboption('picking', form.DummyValue, '_picking', null);
+		o.rawhtml = true;
+		o.cfgvalue = function() {
+			var statusEl = E('div', { 'class': 'cbi-value-description' }, _('正在读取 honk 状态…'));
+			var groupSel = E('select', { 'class': 'cbi-input-select', 'style': 'margin-right:6px' });
+			var memberSel = E('select', { 'class': 'cbi-input-select', 'style': 'margin-right:6px' });
+			var applyBtn = E('button', {
+				'class': 'btn cbi-button cbi-button-apply'
+			}, _('切换'));
+			var table = E('table', { 'class': 'table' }, [
+				E('tr', { 'class': 'tr table-titles' }, [
+					E('th', { 'class': 'th' }, _('节点')),
+					E('th', { 'class': 'th' }, _('延迟')),
+					E('th', { 'class': 'th' }, _('状态'))
+				])
+			]);
+
+			// 后端可能不只有一个字段叫延迟，按优先级取第一个有值的
+			function pickLatency(n) {
+				var cands = [n.latency_ms, n.latencyMs, n.latency, n.last_latency_ms];
+				for (var i = 0; i < cands.length; i++)
+					if (typeof cands[i] === 'number' && isFinite(cands[i]))
+						return Math.round(cands[i]);
+				return null;
+			}
+
+			function api(cmd) {
+				return fs.exec('/usr/share/honk/honk-api.sh ' + cmd).then(function(res) {
+					if (res.code !== 0)
+						throw new Error((res.stderr || '').trim() || ('exit ' + res.code));
+					return JSON.parse(res.stdout || '{}');
+				});
+			}
+
+			function refresh() {
+				statusEl.textContent = _('正在读取 honk 状态…');
+				return Promise.all([
+					api('groups').catch(function(e) { return { __err: String(e) }; }),
+					api('nodes').catch(function(e) { return { __err: String(e) }; })
+				]).then(function(r) {
+					var groups = r[0], nodes = r[1];
+					if (groups.__err || nodes.__err) {
+						statusEl.style.color = 'red';
+						statusEl.textContent = _('读取失败：honk 没在运行，或者没开原生 API。') +
+							' ' + (groups.__err || nodes.__err);
+						return;
+					}
+
+					statusEl.style.color = 'green';
+					statusEl.textContent = _('已连接 honk 原生 API。');
+
+					var glist = Array.isArray(groups) ? groups : (groups.groups || []);
+					var nlist = Array.isArray(nodes) ? nodes : (nodes.nodes || []);
+
+					groupSel.innerHTML = '';
+					glist.forEach(function(g) {
+						groupSel.appendChild(E('option', { 'value': g.id || g.group_id || g.name },
+							(g.name || g.id || '?') + ' · ' + (g.policy || '')));
+					});
+
+					function fillMembers() {
+						var g = glist.filter(function(x) {
+							return (x.id || x.group_id || x.name) === groupSel.value;
+						})[0];
+						memberSel.innerHTML = '';
+						((g && (g.members || g.direct_members)) || nlist).forEach(function(m) {
+							memberSel.appendChild(E('option', {
+								'value': m.id || m.member_id || m.node_id
+							}, m.name || m.id || '?'));
+						});
+					}
+					groupSel.onchange = fillMembers;
+					fillMembers();
+
+					// 延迟表
+					while (table.rows.length > 1) table.deleteRow(1);
+					(nlist.length ? nlist : []).forEach(function(n) {
+						var ms = pickLatency(n);
+						var healthy = n.healthy !== false && n.alive !== false && !n.error;
+						table.appendChild(E('tr', { 'class': 'tr' }, [
+							E('td', { 'class': 'td' }, n.name || n.id || '?'),
+							E('td', { 'class': 'td' }, ms === null ? '-' : (ms + ' ms')),
+							E('td', { 'class': 'td' },
+								E('span', { 'style': 'color:' + (healthy ? 'green' : 'red') },
+									healthy ? _('可用') : _('不可用')))
+						]));
+					});
+					if (!nlist.length)
+						table.appendChild(E('tr', { 'class': 'tr' },
+							E('td', { 'class': 'td', 'colspan': 3 }, _('还没有节点。'))));
+				}).catch(function(e) {
+					statusEl.style.color = 'red';
+					statusEl.textContent = String(e);
+				});
+			}
+
+			applyBtn.onclick = function(ev) {
+				ev.preventDefault();
+				if (!groupSel.value || !memberSel.value)
+					return;
+				applyBtn.disabled = true;
+				var body = JSON.stringify({ member_id: memberSel.value, network: 'both' });
+				return api('select ' + groupSel.value + " '" + body + "'").then(function() {
+					ui.addNotification(null, E('p', {}, _('已切换。')), 'info');
+					return refresh();
+				}).catch(function(e) {
+					ui.addNotification(null, E('p', {}, _('切换失败：') + e), 'error');
+				}).then(function() { applyBtn.disabled = false; });
+			};
+
+			setTimeout(refresh, 0);
+
+			return E('div', {}, [
+				statusEl,
+				E('div', { 'style': 'margin:8px 0' }, [ groupSel, memberSel, applyBtn ]),
+				table,
+				E('div', { 'class': 'cbi-value-description', 'style': 'margin-top:8px' },
+					_('这里改的是 selector 组的手动选择；urltest 和 score 组会自己做决定，' +
+					  '切过去也会被策略覆盖。要让自动选优生效，把组的策略设成「延迟最低」。'))
+			]);
+		};
 
 		/* ================= 访问控制 ================= */
 

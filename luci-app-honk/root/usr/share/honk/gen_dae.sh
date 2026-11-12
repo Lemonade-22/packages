@@ -46,6 +46,9 @@ STALE_TTL="$(q infra.optimistic_stale_reply_ttl)"
 CACHE_FILE="$(q infra.cache_file)"
 BLOCK_HTTPS="$(q infra.block_https_rr)"
 AD_BLOCK="$(q infra.ad_block)"
+NATIVE_API="$(q infra.native_api)"
+API_PORT="$(q infra.native_api_port)"
+[ -n "$API_PORT" ] || API_PORT="9527"
 AB_FILE="$(q infra.ad_block_file)"
 [ -n "$AB_FILE" ] || AB_FILE="/etc/honk/adblock.list"
 
@@ -277,13 +280,29 @@ mkdir -p "$(dirname "$OUT")"
   echo "    }"
   echo "}"
 
+  # experimental 下可能同时要 cache_file 和 native_api，
+  # 必须攒到一起写，不能各写一个 experimental 块（重复块后者会覆盖前者）。
+  exp_inner=""
   if [ "$CACHE_FILE" = "1" ]; then
+    exp_inner="${exp_inner}    cache_file {
+        enabled: true
+        store_dns: true
+    }
+"
+  fi
+  if [ "$NATIVE_API" = "1" ]; then
+    # 只监听回环 + 匿名访问，不开 config_write：够看延迟和切节点，
+    # 不给 UI 改配置的权限。
+    exp_inner="${exp_inner}    native_api {
+        listen: '127.0.0.1:${API_PORT}'
+        allow_anonymous_loopback: true
+    }
+"
+  fi
+  if [ -n "$exp_inner" ]; then
     echo
     echo "experimental {"
-    echo "    cache_file {"
-    echo "        enabled: true"
-    echo "        store_dns: true"
-    echo "    }"
+    printf '%s' "$exp_inner"
     echo "}"
   fi
 
