@@ -63,13 +63,9 @@ config group 'proxy'
 # 访问控制：按源/目标地址决定走代理还是直连
 config control 'control'
 	option lan_list_mode '0'
-	list lan_proxy ''
-	list lan_direct ''
-	list wan_proxy ''
-	list wan_direct ''
 
 # 域名分流：action = direct / proxy
-config domain_route 'sample'
+config domain_route 'example_route'
 	option enabled '0'
 	option name 'cn_direct'
 	option action 'direct'
