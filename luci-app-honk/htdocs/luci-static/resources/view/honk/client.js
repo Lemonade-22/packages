@@ -76,11 +76,8 @@ return view.extend({
 		o.value('common', _('仅常用端口（跳过 P2P）'));
 
 		o = s.taboption('routing', form.ListValue, 'quic_mode', _('QUIC 处理'));
-		o.description = [
-			_('阻断：丢弃 UDP 443，浏览器和应用回落到 TCP/TLS。'),
-			_('直连：这部分流量从本地宽带出去，等于多一条不受控的出口。'),
-			_('不处理：honk 完全不碰 QUIC。建议保持阻断。')
-		].join('\n');
+		o.description = _('建议阻断：丢弃 UDP 443，应用回落 TCP/TLS；' +
+			'设为直连则该流量从本地宽带出去；不处理则 honk 完全不碰 QUIC。');
 		o.value('block', _('阻断'));
 		o.value('direct', _('直连'));
 		o.value('off', _('不处理'));
@@ -89,13 +86,9 @@ return view.extend({
 
 
 		o = s.taboption('routing', form.ListValue, 'ipv6_mode', _('IPV6'));
-		o.description = [
-			_('代理：不生成规则，v6 跟随 fallback 进入节点。'),
-			_('直连：ipversion(6) -> direct 置于最前，v6 从本地宽带出去。'),
-			_('阻断（大陆除外）：ipversion(6) -> block 排在 geosite-cn/geoip-cn 之后，国内 v6 仍直连。'),
-			_('全局阻断：ipversion(6) -> block 置于最前，任何 v6 都不出网。'),
-			_('阻断只拦 TCP/UDP 出网，WAN 前缀委派、RA/SLAAC 和局域网内部 v6 通信照常。')
-		].join('\n');
+		o.description = _('代理＝v6 走节点；直连＝从本地宽带出；' +
+			'阻断（大陆除外）＝国内 v6 仍直连、其余断；全局阻断＝所有 v6 都不出网。' +
+			'阻断只拦 TCP/UDP 出网，LAN 内部 v6 与 RA/SLAAC 照常。');
 		o.value('proxy', _('代理 IPv6'));
 		o.value('direct', _('IPv6 直连'));
 		o.value('block', _('IPv6 阻断（大陆除外）'));
