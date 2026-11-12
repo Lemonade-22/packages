@@ -136,6 +136,18 @@ for package in "${mapped[@]}"; do
 	done < <(git -C "${srcs[$package]}" ls-tree -r HEAD | awk '$1 == "100755" { sub(/^[^\t]*\t/, ""); print }')
 done
 
+# 上游编译 CI 会对下面这些目录里的文件强制 755，再做 git diff --exit-code 校验。
+# 同步时就地对齐，否则每次同步后的编译都会卡在「验证软件包文件权限」。
+for package in "${mapped[@]}"; do
+	for sub in root/bin root/sbin root/usr/bin root/usr/sbin root/usr/libexec \
+		root/etc/hotplug.d root/etc/init.d root/etc/uci-defaults; do
+		[[ -d "$package/$sub" ]] || continue
+		while IFS= read -r file; do
+			git update-index --chmod=+x -- "$file"
+		done < <(find "$package/$sub" -type f)
+	done
+done
+
 if git diff --cached --quiet; then
 	printf '源仓库无变化，不产生提交。\n'
 	exit 0
