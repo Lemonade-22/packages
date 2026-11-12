@@ -102,7 +102,7 @@ return view.extend({
 
 		/* infra 段：接口与运行时 */
 		var sv = s.taboption('routing', form.SectionValue, '_infra', form.NamedSection, 'infra', 'honk');
-		sv.depends('enabled', '1');
+		sv
 		var ss = sv.subsection;
 
 		o = ss.option(form.Value, 'lan_interface', _('LAN 接口'),
@@ -210,10 +210,10 @@ return view.extend({
 					E('em', {}, (data.ifaces || []).join(', ') || _('（未发现）')))
 			]);
 		};
-		o.depends('enabled', '1');
+		o
 
 		var sv2 = s.taboption('ssid', form.SectionValue, '_ssid_routes', form.GridSection, 'ssid_route', null);
-		sv2.depends('enabled', '1');
+		sv2
 		var ssr = sv2.subsection;
 		ssr.addremove = true;
 		ssr.sortable = true;
@@ -258,7 +258,7 @@ return view.extend({
 		/* ================= DNS ================= */
 
 		var dnsv = s.taboption('dns', form.SectionValue, '_dns', form.NamedSection, 'infra', 'honk');
-		dnsv.depends('enabled', '1');
+		dnsv
 		var ds = dnsv.subsection;
 
 		ds.tab('dns_basic', _('基础设置'));
@@ -374,7 +374,7 @@ return view.extend({
 		/* ================= 访问控制 ================= */
 
 		var cv = s.taboption('control', form.SectionValue, '_control', form.NamedSection, 'control', 'honk');
-		cv.depends('enabled', '1');
+		cv
 		var cs = cv.subsection;
 
 		o = cs.option(form.ListValue, 'lan_list_mode', _('局域网源地址策略'));
@@ -413,10 +413,10 @@ return view.extend({
 				_('域名列表会生成 domain(suffix: …) 规则，按后缀匹配，' +
 				  '所以 qq.com 也覆盖 www.qq.com。一行一个域名。'));
 		};
-		o.depends('enabled', '1');
+		o
 
 		var dv = s.taboption('diversion', form.SectionValue, '_domain_routes', form.GridSection, 'domain_route', null);
-		dv.depends('enabled', '1');
+		dv
 		var dr = dv.subsection;
 		dr.addremove = true;
 		dr.sortable = true;
