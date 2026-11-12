@@ -390,50 +390,6 @@ return view.extend({
 		o.write = function(section_id, value) { syncOne('remote', value || '', null); };
 		o.rmempty = true;
 
-		/* 上游列表：给需要第三个上游、或要改出站/角色的场景用。
-		   上面两个下拉写入的 cn_1 / remote_1 也会出现在这里。 */
-		o = ds.taboption('dns_advanced', form.DummyValue, '_upstreams_hint', null);
-		o.rawhtml = true;
-		o.cfgvalue = function() {
-			return E('div', { 'class': 'cbi-value-description' },
-				_('上面「DNS服务器」页的两个下拉会写成 cn_1 和 remote_1。' +
-				  '这张表用于额外场景：加第三个上游、改它的出站组或角色。' +
-				  '改 role 会覆盖下拉的选择。'));
-		};
-
-		var upv = ds.taboption('dns_advanced', form.SectionValue, '_upstreams', form.GridSection, 'dns_upstream', null);
-		var up = upv.subsection;
-		up.addremove = true;
-		up.sortable = true;
-		up.anonymous = true;
-		up.sectiontitle = function(section_id) {
-			var name = uci.get('honk', section_id, 'name');
-			return name || section_id;
-		};
-
-		o = up.option(form.Flag, 'enabled', _('启用'));
-		o.default = '1';
-		o.rmempty = false;
-
-		o = up.option(form.Value, 'name', _('名称'));
-		o.placeholder = 'cn_ali';
-		o.datatype = 'and(uciname)';
-		o.rmempty = false;
-
-		o = up.option(form.Value, 'uri', _('服务器'));
-		o.placeholder = 'https://dns.alidns.com/dns-query';
-		o.rmempty = false;
-
-		o = up.option(form.ListValue, 'role', _('角色'));
-		o.value('cn', _('大陆'));
-		o.value('remote', _('远端'));
-		o.default = 'remote';
-		o.rmempty = false;
-
-		o = up.option(form.Value, 'outbound', _('出站'));
-		o.placeholder = _('（跟随路由规则）');
-		o.rmempty = true;
-
 		/* ---- 高级 ---- */
 		o = ds.taboption('dns_advanced', form.Value, 'max_cache_size', _('缓存条数'),
 			_('取值 1 到 100000。'));
@@ -485,17 +441,18 @@ return view.extend({
 			  'AdGuard 语法和 hosts 行会被自动过滤成纯域名。回车确认。'));
 		o.placeholder = 'https://example.com/domains.txt';
 		o.datatype = 'url';
+		o.depends('ad_block_source', 'custom');
 		o.rmempty = true;
 
-		o = ds.taboption('dns_advanced', form.Button, '_fetch_adblock', _('下载规则'));
-		o.inputtitle = _('立即下载');
+		o = ds.taboption('dns_advanced', form.Button, '_fetch_adblock', _('更新规则'));
+		o.inputtitle = _('立即更新');
 		o.inputstyle = 'apply';
 		o.onclick = function() {
 			var out = E('pre', {
 				'class': 'cbi-input-textarea',
 				'style': 'height:12em;overflow:auto;white-space:pre-wrap;font-family:monospace;font-size:12px;'
 			}, _('正在下载…'));
-			ui.showModal(_('下载广告规则'), [out, E('div', { 'class': 'right' },
+			ui.showModal(_('更新广告规则'), [out, E('div', { 'class': 'right' },
 				E('button', { 'class': 'btn', 'click': ui.hideModal }, _('关闭')))]);
 			return fs.exec('/usr/share/honk/update-adblock.sh').then(function(res) {
 				out.textContent = (res.stdout || '') + (res.stderr || '');
