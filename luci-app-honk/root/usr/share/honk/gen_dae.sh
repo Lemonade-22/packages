@@ -218,9 +218,11 @@ mkdir -p "$(dirname "$OUT")"
     else
       echo "        $(sq "$uname"): '$(sq "$uuri")'"
     fi
+    # honk 的 dns.routing 一个目标只能指一个上游；多选时取第一个，
+    # 其余仍然声明在 upstream 块里（留着备用，不参与路由）。
     case "$urole" in
-      cn) cn_up="$uname" ;;
-      *) remote_up="$uname" ;;
+      cn) [ -z "$cn_up" ] && cn_up="$uname" ;;
+      *) [ -z "$remote_up" ] && remote_up="$uname" ;;
     esac
   done
   echo "    }"

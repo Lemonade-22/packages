@@ -262,6 +262,7 @@ return view.extend({
 		var ds = dnsv.subsection;
 
 		ds.tab('dns_basic', _('基础设置'));
+		ds.tab('dns_servers', _('DNS服务器'));
 		ds.tab('dns_advanced', _('高级设置'));
 
 		/* ---- 基础 ---- */
@@ -329,41 +330,48 @@ return view.extend({
 			'https://dns.adguard-dns.com/dns-query': 'AdGuard DoH'
 		};
 
-		function syncUpstream(cfg, uri, role, fallbackName) {
-			var sections = uci.sections('honk', 'dns_upstream');
-			var target = null;
-			for (var i = 0; i < sections.length; i++) {
-				if (sections[i].role === role) { target = sections[i]['.name']; break; }
-			}
-			if (!target) target = fallbackName;
-			uci.set('honk', target, 'enabled', uri ? '1' : '0');
-			uci.set('honk', target, 'name', fallbackName);
-			uci.set('honk', target, 'role', role);
-			if (uri) uci.set('honk', target, 'uri', uri);
+		/* 多选：按选中的顺序重建该角色的上游段。
+		   honk 的 dns.routing 只能指向一个上游，生成器取第一个；其余声明保留备用。 */
+		function syncUpstreams(role, uris, outbound) {
+			var prefix = role === 'cn' ? 'cn' : 'remote';
+			var existing = uci.sections('honk', 'dns_upstream').filter(function(x) { return x.role === role; });
+			existing.forEach(function(x) { uci.remove('honk', x['.name']); });
+			if (!uris.length) return;
+			uris.forEach(function(uri, idx) {
+				var sid = prefix + '_' + (idx + 1);
+				uci.set('honk', sid, 'dns_upstream');
+				uci.set('honk', sid, 'enabled', '1');
+				uci.set('honk', sid, 'name', sid);
+				uci.set('honk', sid, 'role', role);
+				uci.set('honk', sid, 'uri', uri);
+				if (outbound) uci.set('honk', sid, 'outbound', outbound);
+			});
 		}
 
-		o = ds.taboption('dns_basic', form.ListValue, '_cn_dns', _('国内 DNS'),
+		o = ds.taboption('dns_servers', form.MultiValue, '_cn_dns', _('国内 DNS'),
 			_('国内域名解析用它。选完会同步到下面的上游表。'));
 		Object.keys(CN_DNS).forEach(function(k) { o.value(k, CN_DNS[k]); });
 		o.cfgvalue = function() {
-			var sec = uci.sections('honk', 'dns_upstream').filter(function(x) { return x.role === 'cn'; });
-			return sec.length ? (sec[0].uri || '') : '';
+			return uci.sections('honk', 'dns_upstream')
+				.filter(function(x) { return x.role === 'cn' && x.enabled === '1'; })
+				.map(function(x) { return x.uri; });
 		};
-		o.write = function(section_id, value) { syncUpstream('cn_ali', value, 'cn', 'cn_ali'); };
+		o.write = function(section_id, value) { syncUpstreams('cn', value || [], 'direct'); };
 		o.rmempty = false;
 
-		o = ds.taboption('dns_basic', form.ListValue, '_remote_dns', _('国外 DNS'),
+		o = ds.taboption('dns_servers', form.MultiValue, '_remote_dns', _('国外 DNS'),
 			_('其余域名用它。选完会同步到下面的上游表。'));
 		Object.keys(REMOTE_DNS).forEach(function(k) { o.value(k, REMOTE_DNS[k]); });
 		o.cfgvalue = function() {
-			var sec = uci.sections('honk', 'dns_upstream').filter(function(x) { return x.role === 'remote'; });
-			return sec.length ? (sec[0].uri || '') : '';
+			return uci.sections('honk', 'dns_upstream')
+				.filter(function(x) { return x.role === 'remote' && x.enabled === '1'; })
+				.map(function(x) { return x.uri; });
 		};
-		o.write = function(section_id, value) { syncUpstream('remote_cf', value, 'remote', 'remote_cf'); };
+		o.write = function(section_id, value) { syncUpstreams('remote', value || [], null); };
 		o.rmempty = false;
 
 		/* 上游列表 */
-		var upv = ds.taboption('dns_basic', form.SectionValue, '_upstreams', form.GridSection, 'dns_upstream', null);
+		var upv = ds.taboption('dns_servers', form.SectionValue, '_upstreams', form.GridSection, 'dns_upstream', null);
 		var up = upv.subsection;
 		up.addremove = true;
 		up.sortable = true;
