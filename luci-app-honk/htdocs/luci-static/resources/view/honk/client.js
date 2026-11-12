@@ -81,14 +81,8 @@ return view.extend({
 		o.value('off', _('不处理'));
 		o.default = 'block';
 		o.rmempty = false;
-		o.description = E('span', {}, [
-			E('span', {
-				title: _('阻断会丢弃 UDP 443，浏览器和应用因此回落到 TCP/TLS。' +
-				         '若把 QUIC 设为直连，这部分流量就从本地宽带出去，' +
-				         '等于多了一条不受控的出口。')
-			}, '\u24d8 '),
-			_('建议阻断。只有某个应用离开 QUIC 就卡死时才改成直连。')
-		]);
+		o.description = _('\u24d8 建议阻断。阻断会丢弃 UDP 443，浏览器和应用因此回落到 TCP/TLS；' +
+			'若设为直连，这部分流量就从本地宽带出去，等于多了一条不受控的出口。');
 
 		o = s.taboption('routing', form.ListValue, 'ipv6_mode', _('IPV6'));
 		o.value('proxy', _('代理 IPv6'));
@@ -97,20 +91,11 @@ return view.extend({
 		o.value('block_global', _('全局 IPv6 阻断'));
 		o.default = 'block';
 		o.rmempty = false;
-		o.description = E('span', {}, [
-			E('span', {
-				title: _('honk 没有 IPv6 开关：eBPF 把 v4 和 v6 一起抓走，' +
-					'v6 走哪条路由完全由下面选中的规则决定。') + '\n\n' +
-					_('代理 —— 不生成规则，v6 跟随 fallback 进入节点。') + '\n' +
-					_('直连 —— ipversion(6) -> direct 置于最前，v6 从本地宽带出去。') + '\n' +
-					_('阻断（大陆除外）—— ipversion(6) -> block 排在 geosite-cn/geoip-cn 之后，' +
-					  '国内 v6 仍直连，其余丢弃。') + '\n' +
-					_('全局阻断 —— ipversion(6) -> block 置于最前，任何 v6 都不出网。') + '\n\n' +
-					_('阻断只拦 TCP/UDP 出网：WAN 前缀委派、' +
-					  'RA/SLAAC 和局域网内部 v6 通信照常。')
-			}, '\u24d8 '),
-			_('四种 IPv6 处理方式，悬停图标可看各项实际生成的规则。')
-		])
+		o.description = _('\u24d8 代理：不生成规则，v6 跟随 fallback 进入节点。' +
+			'直连：ipversion(6) -> direct 置于最前，v6 从本地宽带出去。' +
+			'阻断（大陆除外）：ipversion(6) -> block 排在 geosite-cn/geoip-cn 之后，国内 v6 仍直连。' +
+			'全局阻断：ipversion(6) -> block 置于最前，任何 v6 都不出网。' +
+			'阻断只拦 TCP/UDP 出网，WAN 前缀委派、RA/SLAAC 和局域网内部 v6 通信照常。');
 
 		/* infra 段：接口与运行时 */
 		var sv = s.taboption('routing', form.SectionValue, '_infra', form.NamedSection, 'infra', 'honk');
@@ -503,12 +488,8 @@ return view.extend({
 
 		/* 自定义路由规则 */
 		o = s.taboption('custom', form.Flag, 'custom_rules_enabled', _('启用自定义规则'),
-			E('span', {}, [
-				E('strong', {}, _('这会整段替换路由规则。')),
-				_('开启后，多SSID分流、访问控制、分流控制、IPv6 模式、' +
-				  '端口白名单和 QUIC 设置全部失效。' +
-				  '兜底那条 fallback 也要你自己写。')
-			]));
+			_('这会整段替换路由规则。开启后，多SSID分流、访问控制、分流控制、IPv6 模式、' +
+			  '端口白名单和 QUIC 设置全部失效；兜底那条 fallback 也要你自己写。'));
 		o.rmempty = false;
 
 		o = s.taboption('custom', form.TextValue, '_custom_rules', _('路由规则'),
