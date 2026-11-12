@@ -69,7 +69,7 @@ config group 'proxy'
 	option final 'direct'
 
 # 订阅：下载后解析成节点，节点名会带上 tag 前缀
-config subscription 'sample'
+config subscription 'example_sub'
 	option enabled '0'
 	option name 'sample'
 	option url ''
