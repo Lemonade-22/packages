@@ -291,6 +291,57 @@ return view.extend({
 		o.datatype = 'hostport';
 		o.rmempty = true;
 
+		/* 快捷选择：跟 MosDNS 一样，国内一个、国外一个 */
+		var CN_DNS = {
+			'https://dns.alidns.com/dns-query': '阿里 DNS',
+			'https://doh.pub/dns-query': '腾讯 DNS',
+			'https://doh.114dns.com/dns-query': '114 DNS',
+			'https://doh.baidu.com/dns-query': '百度 DNS',
+			'udp://223.5.5.5:53': '阿里 DNS（UDP）',
+			'udp://119.29.29.29:53': '腾讯 DNS（UDP）'
+		};
+		var REMOTE_DNS = {
+			'https://dns.cloudflare.com/dns-query': 'Cloudflare',
+			'https://dns.google/dns-query': 'Google',
+			'https://dns.quad9.net/dns-query': 'Quad9',
+			'https://dns.adguard-dns.com/dns-query': 'AdGuard',
+			'udp://1.1.1.1:53': 'Cloudflare（UDP）',
+			'udp://8.8.8.8:53': 'Google（UDP）'
+		};
+
+		function syncUpstream(cfg, uri, role, fallbackName) {
+			var sections = uci.sections('honk', 'dns_upstream');
+			var target = null;
+			for (var i = 0; i < sections.length; i++) {
+				if (sections[i].role === role) { target = sections[i]['.name']; break; }
+			}
+			if (!target) target = fallbackName;
+			uci.set('honk', target, 'enabled', uri ? '1' : '0');
+			uci.set('honk', target, 'name', fallbackName);
+			uci.set('honk', target, 'role', role);
+			if (uri) uci.set('honk', target, 'uri', uri);
+		}
+
+		o = ds.taboption('dns_basic', form.ListValue, '_cn_dns', _('国内 DNS'),
+			_('国内域名解析用它。选完会同步到下面的上游表。'));
+		Object.keys(CN_DNS).forEach(function(k) { o.value(k, CN_DNS[k]); });
+		o.cfgvalue = function() {
+			var sec = uci.sections('honk', 'dns_upstream').filter(function(x) { return x.role === 'cn'; });
+			return sec.length ? (sec[0].uri || '') : '';
+		};
+		o.write = function(section_id, value) { syncUpstream('cn_ali', value, 'cn', 'cn_ali'); };
+		o.rmempty = false;
+
+		o = ds.taboption('dns_basic', form.ListValue, '_remote_dns', _('国外 DNS'),
+			_('其余域名用它。选完会同步到下面的上游表。'));
+		Object.keys(REMOTE_DNS).forEach(function(k) { o.value(k, REMOTE_DNS[k]); });
+		o.cfgvalue = function() {
+			var sec = uci.sections('honk', 'dns_upstream').filter(function(x) { return x.role === 'remote'; });
+			return sec.length ? (sec[0].uri || '') : '';
+		};
+		o.write = function(section_id, value) { syncUpstream('remote_cf', value, 'remote', 'remote_cf'); };
+		o.rmempty = false;
+
 		/* 上游列表 */
 		var upv = ds.taboption('dns_basic', form.SectionValue, '_upstreams', form.GridSection, 'dns_upstream', null);
 		var up = upv.subsection;
@@ -306,15 +357,12 @@ return view.extend({
 		o.default = '1';
 		o.rmempty = false;
 
-		o = up.option(form.Value, 'name', _('名称'),
-			_('作为路由规则里的标识，小写且不含空格。'));
+		o = up.option(form.Value, 'name', _('名称'));
 		o.placeholder = 'cn_ali';
 		o.datatype = 'and(uciname)';
 		o.rmempty = false;
 
-		o = up.option(form.Value, 'uri', _('服务器'),
-			_('完整 URI。支持 udp:// tcp:// tls:// https:// quic:// h3://。' +
-			  '只写 host:port 时按 UDP 处理。'));
+		o = up.option(form.Value, 'uri', _('服务器'));
 		o.placeholder = 'https://dns.alidns.com/dns-query';
 		o.rmempty = false;
 
@@ -323,11 +371,8 @@ return view.extend({
 		o.value('remote', _('远端'));
 		o.default = 'remote';
 		o.rmempty = false;
-		o.description = _('大陆上游负责 geosite:cn 的查询，' +
-			'远端上游兜底其余全部。');
 
-		o = up.option(form.Value, 'outbound', _('出站'),
-			_('可选组名。填了则查询该上游时经这个组出站。'));
+		o = up.option(form.Value, 'outbound', _('出站'));
 		o.placeholder = _('（跟随路由规则）');
 		o.rmempty = true;
 
