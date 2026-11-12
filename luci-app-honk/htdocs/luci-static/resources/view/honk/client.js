@@ -717,6 +717,125 @@ return view.extend({
 			]);
 		};
 
+		/* 连通性：照 homeproxy 的服务状态页，一张表加一个测试按钮。
+		   honk 没有这类 RPC，跑 probe.sh 拿 "key|ok|毫秒" 再解析。 */
+		o = s.taboption('status', form.DummyValue, '_probe', _('连通性'));
+		o.rawhtml = true;
+		o.cfgvalue = function() {
+			var SITES = [
+				['baidu', _('百度'), 'https://www.baidu.com/'],
+				['bilibili', _('哔哩哔哩'), 'https://www.bilibili.com/'],
+				['jd', _('京东'), 'https://www.jd.com/'],
+				['google', _('Google'), 'https://www.google.com/'],
+				['github', _('GitHub'), 'https://github.com/'],
+				['youtube', _('YouTube'), 'https://www.youtube.com/']
+			];
+
+			var cells = {};
+			var table = E('table', { 'class': 'table' }, [
+				E('tr', { 'class': 'tr table-titles' }, [
+					E('th', { 'class': 'th' }, _('网站')),
+					E('th', { 'class': 'th' }, _('地址')),
+					E('th', { 'class': 'th' }, _('连通')),
+					E('th', { 'class': 'th' }, _('延迟'))
+				])
+			]);
+
+			SITES.forEach(function(site) {
+				var state = E('strong', { 'style': 'color:gray' }, '-');
+				var latency = E('span', {}, '-');
+				cells[site[0]] = { state: state, latency: latency };
+				table.appendChild(E('tr', { 'class': 'tr' }, [
+					E('td', { 'class': 'td' }, site[1]),
+					E('td', { 'class': 'td' }, E('a', {
+						'href': site[2], 'target': '_blank', 'rel': 'noreferrer noopener',
+						'style': 'word-break:break-all'
+					}, site[2])),
+					E('td', { 'class': 'td' }, state),
+					E('td', { 'class': 'td' }, latency)
+				]));
+			});
+
+			var btn = E('button', {
+				'class': 'btn cbi-button cbi-button-action',
+				'click': ui.createHandlerFn(this, function(ev) {
+					ev.preventDefault();
+					btn.disabled = true;
+					btn.textContent = _('测试中…');
+					return fs.exec('/usr/share/honk/probe.sh').then(function(res) {
+						String(res.stdout || '').split('\n').forEach(function(line) {
+							var p = line.split('|');
+							if (p.length < 2) return;
+							var c = cells[p[0]];
+							if (!c) return;
+							if (p[1] === 'ok') {
+								c.state.style.color = 'green';
+								c.state.textContent = _('通');
+								c.latency.textContent = p[2] + ' ms';
+							} else {
+								c.state.style.color = 'red';
+								c.state.textContent = _('不通');
+								c.latency.textContent = p[2] || '';
+							}
+						});
+					}).catch(function(e) {
+						ui.addNotification(null, E('p', {}, String(e)), 'error');
+					}).then(function() {
+						btn.disabled = false;
+						btn.textContent = _('测试');
+					});
+				})
+			}, _('测试'));
+
+			return E('div', {}, [
+				E('div', { 'style': 'margin-bottom:8px' }, [ btn ]),
+				table
+			]);
+		};
+
+		/* 资源：geo 数据在不在、多大、什么时候更新的 */
+		o = s.taboption('status', form.DummyValue, '_res', _('规则资源'));
+		o.rawhtml = true;
+		o.cfgvalue = function() {
+			var files = [
+				['geoip.dat', _('GeoIP 数据（CN + private）')],
+				['geosite.dat', _('GeoSite 数据')]
+			];
+			var table = E('table', { 'class': 'table' }, [
+				E('tr', { 'class': 'tr table-titles' }, [
+					E('th', { 'class': 'th' }, _('文件')),
+					E('th', { 'class': 'th' }, _('状态')),
+					E('th', { 'class': 'th' }, _('大小')),
+					E('th', { 'class': 'th' }, _('更新时间'))
+				])
+			]);
+
+			return Promise.all(files.map(function(item) {
+				return fs.stat('/usr/share/honk/geo/' + item[0])
+					.catch(function() { return null; });
+			})).then(function(stats) {
+				files.forEach(function(item, i) {
+					var st = stats[i];
+					table.appendChild(E('tr', { 'class': 'tr' }, [
+						E('td', { 'class': 'td' }, item[1]),
+						E('td', { 'class': 'td' },
+							st ? E('span', { 'style': 'color:green' }, _('就绪'))
+							   : E('span', { 'style': 'color:red' }, _('缺失'))),
+						E('td', { 'class': 'td' },
+							st ? (Math.round(st.size / 1024) + ' KB') : '-'),
+						E('td', { 'class': 'td' },
+							(st && st.mtime) ? new Date(st.mtime).toLocaleString() : '-')
+					]));
+				});
+				if (!stats.some(Boolean))
+					table.appendChild(E('tr', { 'class': 'tr' }, [
+						E('td', { 'class': 'td', 'colspan': 4 },
+							_('一个都没有。geo 规则会静默失效，honk 只打 WARN 不会报错。'))
+					]));
+				return table;
+			});
+		};
+
 		/* 日志观察窗：poll 每 5 秒重读一次，只读 */
 		o = s.taboption('status', form.DummyValue, '_log', _('运行日志'));
 		o.rawhtml = true;
