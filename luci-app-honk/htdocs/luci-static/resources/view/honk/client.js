@@ -15,15 +15,6 @@
  * 列的是组名，不是节点名——哪怕那个组里只有一个节点。
  */
 return view.extend({
-	/* 悬停问号：LuCI 的 description 只吃字符串，塞 DOM 会被吞，
-	   所以把详细说明挂到 label 里的问号上，用原生 title 显示。 */
-	hintMark: function(text) {
-		return E('span', {
-			title: text,
-			style: 'cursor:help;color:#3b82f6;margin-left:6px;font-weight:bold'
-		}, '?');
-	},
-
 	load: function() {
 		return Promise.all([ uci.load('honk'), uci.load('network') ]).then(function() {
 			var groups = uci.sections('honk', 'group').map(function(g) {
@@ -84,15 +75,10 @@ return view.extend({
 		o.value('', _('全部端口'));
 		o.value('common', _('仅常用端口（跳过 P2P）'));
 
-		o = s.taboption('routing', form.ListValue, 'quic_mode',
-			E('span', {}, [
-				_('QUIC 处理'),
-				this.hintMark(
-					_('阻断：丢弃 UDP 443，浏览器和应用回落到 TCP/TLS。') + '\n' +
-					_('直连：这部分流量从本地宽带出去，等于多一条不受控的出口。') + '\n' +
-					_('不处理：honk 完全不碰 QUIC。建议保持阻断。')
-				)
-			]));
+		o = s.taboption('routing', form.ListValue, 'quic_mode', _('QUIC 处理'));
+		o.description = _('阻断：丢弃 UDP 443，浏览器和应用回落到 TCP/TLS。' +
+			'直连：这部分流量从本地宽带出去，等于多一条不受控的出口。' +
+			'不处理：honk 完全不碰 QUIC。建议保持阻断。');
 		o.value('block', _('阻断'));
 		o.value('direct', _('直连'));
 		o.value('off', _('不处理'));
@@ -100,17 +86,12 @@ return view.extend({
 		o.rmempty = false;
 
 
-		o = s.taboption('routing', form.ListValue, 'ipv6_mode',
-			E('span', {}, [
-				_('IPV6'),
-				this.hintMark(
-					_('代理：不生成规则，v6 跟随 fallback 进入节点。') + '\n' +
-					_('直连：ipversion(6) -> direct 置于最前，v6 从本地宽带出去。') + '\n' +
-					_('阻断（大陆除外）：ipversion(6) -> block 排在 geosite-cn/geoip-cn 之后，国内 v6 仍直连。') + '\n' +
-					_('全局阻断：ipversion(6) -> block 置于最前，任何 v6 都不出网。') + '\n' +
-					_('阻断只拦 TCP/UDP 出网，WAN 前缀委派、RA/SLAAC 和局域网内部 v6 通信照常。')
-				)
-			]));
+		o = s.taboption('routing', form.ListValue, 'ipv6_mode', _('IPV6'));
+		o.description = _('代理：不生成规则，v6 跟随 fallback 进入节点。' +
+			'直连：ipversion(6) -> direct 置于最前，v6 从本地宽带出去。' +
+			'阻断（大陆除外）：ipversion(6) -> block 排在 geosite-cn/geoip-cn 之后，国内 v6 仍直连。' +
+			'全局阻断：ipversion(6) -> block 置于最前，任何 v6 都不出网。' +
+			'阻断只拦 TCP/UDP 出网，WAN 前缀委派、RA/SLAAC 和局域网内部 v6 通信照常。');
 		o.value('proxy', _('代理 IPv6'));
 		o.value('direct', _('IPv6 直连'));
 		o.value('block', _('IPv6 阻断（大陆除外）'));
