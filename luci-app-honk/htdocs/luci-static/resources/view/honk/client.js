@@ -469,6 +469,43 @@ return view.extend({
 		o.default = '1';
 		o.rmempty = false;
 
+		/* 规则来源：预设站点或自定义 URL，按下按钮才下载 */
+		o = ds.taboption('dns_advanced', form.ListValue, 'ad_block_source', _('规则来源'),
+			_('选预设会覆盖下面的自定义地址。下载后写入 /etc/honk/adblock.list，' +
+			  '生成配置时读它。'));
+		o.value('none', _('不下载（只用上面的 geosite 分类）'));
+		o.value('anti-ad', _('anti-AD'));
+		o.value('adrules', _('AdRules'));
+		o.value('custom', _('自定义'));
+		o.default = 'none';
+		o.rmempty = false;
+
+		o = ds.taboption('dns_advanced', form.Value, 'ad_block_url', _('自定义地址'),
+			_('仅在规则来源选「自定义」时生效。填纯文本列表的 URL，' +
+			  'AdGuard 语法和 hosts 行会被自动过滤成纯域名。回车确认。'));
+		o.placeholder = 'https://example.com/domains.txt';
+		o.datatype = 'url';
+		o.rmempty = true;
+
+		o = ds.taboption('dns_advanced', form.Button, '_fetch_adblock', _('下载规则'));
+		o.inputtitle = _('立即下载');
+		o.inputstyle = 'apply';
+		o.onclick = function() {
+			var out = E('pre', {
+				'class': 'cbi-input-textarea',
+				'style': 'height:12em;overflow:auto;white-space:pre-wrap;font-family:monospace;font-size:12px;'
+			}, _('正在下载…'));
+			ui.showModal(_('下载广告规则'), [out, E('div', { 'class': 'right' },
+				E('button', { 'class': 'btn', 'click': ui.hideModal }, _('关闭')))]);
+			return fs.exec('/usr/share/honk/update-adblock.sh').then(function(res) {
+				out.textContent = (res.stdout || '') + (res.stderr || '');
+				return fs.read('/etc/honk/adblock.list').catch(function() { return ''; });
+			}).then(function(txt) {
+				var n = (txt || '').split('\n').filter(function(x) { return x.trim(); }).length;
+				out.textContent += '\n\n当前列表：' + n + ' 条';
+			}).catch(function(e) { out.textContent = String(e); });
+		};
+
 		/* 自定义广告域名：写文件，生成器按 40 个一组拆成 domain(suffix:) 规则 */
 		o = ds.taboption('dns_advanced', form.TextValue, '_adblock_list', _('自定义广告域名'),
 			_('一行一个域名，按后缀匹配，所以 example.com 也覆盖 a.example.com。' +
