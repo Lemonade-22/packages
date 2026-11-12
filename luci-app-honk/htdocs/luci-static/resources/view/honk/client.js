@@ -104,7 +104,6 @@ return view.extend({
 
 		/* infra 段：接口与运行时 */
 		var sv = s.taboption('routing', form.SectionValue, '_infra', form.NamedSection, 'infra', 'honk');
-		sv
 		var ss = sv.subsection;
 
 		o = ss.option(form.Value, 'lan_interface', _('LAN 接口'),
@@ -208,14 +207,14 @@ return view.extend({
 				E('p', {}, _('一行一个 SSID 网段。每行生成一条 sip(<源网段>) 出口规则；' +
 					'填了 DNS 上游时，还会在 dns.routing.request 里生成对应的 sip() 规则。' +
 					'这些规则排在大陆直连规则之前，所以网段总是优先。')),
-				E('p', {}, _('可选的 wifiNN 接口：') +
-					E('em', {}, (data.ifaces || []).join(', ') || _('（未发现）')))
+				E('p', {}, (data.ifaces || []).length
+					? _('可选的 wifiNN 接口：') + E('em', {}, data.ifaces.join(', '))
+					: _('本机没有 wifiNN 接口——可能是 WIFI-NO 固件（无无线驱动），或者还没生成多 SSID。' +
+						'接口一栏留空即可，直接填网段。'))
 			]);
 		};
-		o
 
 		var sv2 = s.taboption('ssid', form.SectionValue, '_ssid_routes', form.GridSection, 'ssid_route', null);
-		sv2
 		var ssr = sv2.subsection;
 		ssr.addremove = true;
 		ssr.sortable = true;
@@ -260,7 +259,6 @@ return view.extend({
 		/* ================= DNS ================= */
 
 		var dnsv = s.taboption('dns', form.SectionValue, '_dns', form.NamedSection, 'infra', 'honk');
-		dnsv
 		var ds = dnsv.subsection;
 
 		ds.tab('dns_basic', _('基础设置'));
@@ -376,7 +374,6 @@ return view.extend({
 		/* ================= 访问控制 ================= */
 
 		var cv = s.taboption('control', form.SectionValue, '_control', form.NamedSection, 'control', 'honk');
-		cv
 		var cs = cv.subsection;
 
 		o = cs.option(form.ListValue, 'lan_list_mode', _('局域网源地址策略'));
@@ -415,10 +412,8 @@ return view.extend({
 				_('域名列表会生成 domain(suffix: …) 规则，按后缀匹配，' +
 				  '所以 qq.com 也覆盖 www.qq.com。一行一个域名。'));
 		};
-		o
 
 		var dv = s.taboption('diversion', form.SectionValue, '_domain_routes', form.GridSection, 'domain_route', null);
-		dv
 		var dr = dv.subsection;
 		dr.addremove = true;
 		dr.sortable = true;
