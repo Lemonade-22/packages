@@ -646,8 +646,11 @@ return view.extend({
 				return null;
 			}
 
-			function api(cmd) {
-				return fs.exec('/usr/share/honk/honk-api.sh ' + cmd).then(function(res) {
+			// fs.exec(command, args)——命令和参数必须分开传。
+			// 拼成一整串会被当成路径，rpcd 找不到就报 NotFoundError。
+			function api() {
+				var args = Array.prototype.slice.call(arguments);
+				return fs.exec('/usr/share/honk/honk-api.sh', args).then(function(res) {
 					if (res.code !== 0)
 						throw new Error((res.stderr || '').trim() || ('exit ' + res.code));
 					return JSON.parse(res.stdout || '{}');
@@ -722,7 +725,7 @@ return view.extend({
 					return;
 				applyBtn.disabled = true;
 				var body = JSON.stringify({ member_id: memberSel.value, network: 'both' });
-				return api('select ' + groupSel.value + " '" + body + "'").then(function() {
+				return api('select', groupSel.value, body).then(function() {
 					ui.addNotification(null, E('p', {}, _('已切换。')), 'info');
 					return refresh();
 				}).catch(function(e) {
