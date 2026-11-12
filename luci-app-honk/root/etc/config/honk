@@ -32,6 +32,11 @@ config honk 'infra'
 	option ad_block_file '/etc/honk/adblock.list'
 	# anti-ad / adrules / custom / none
 	option ad_block_source 'none'
+	# DNS 单选：cn_dns / remote_dns 是预设，*_custom 非空时优先
+	option cn_dns ''
+	option cn_dns_custom ''
+	option remote_dns ''
+	option remote_dns_custom ''
 	option ad_block_url ''
 
 # 上游 DNS。role: cn / remote
