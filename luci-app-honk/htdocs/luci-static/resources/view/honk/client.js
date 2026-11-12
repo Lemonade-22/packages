@@ -301,12 +301,6 @@ return view.extend({
 			'udp://114.114.114.114:53': '114 DNS 114.114.114.114',
 			'udp://114.114.115.115:53': '114 DNS 114.114.115.115',
 			'udp://180.76.76.76:53': '百度 180.76.76.76',
-			'udp://119.6.6.6:53': '联通 119.6.6.6',
-			'udp://123.125.81.6:53': '联通 123.125.81.6',
-			'udp://101.226.4.6:53': '电信 101.226.4.6',
-			'udp://218.30.118.6:53': '电信 218.30.118.6',
-			'udp://1.2.4.8:53': '电信 1.2.4.8',
-			'udp://223.87.238.41:53': '移动 223.87.238.41',
 			'https://dns.alidns.com/dns-query': '阿里 DoH',
 			'https://doh.pub/dns-query': '腾讯 DoH',
 			'https://doh.114dns.com/dns-query': '114 DoH',
@@ -332,43 +326,79 @@ return view.extend({
 
 		/* 多选：按选中的顺序重建该角色的上游段。
 		   honk 的 dns.routing 只能指向一个上游，生成器取第一个；其余声明保留备用。 */
-		function syncUpstreams(role, uris, outbound) {
+		/* 单一上游：清掉该角色旧段，重建一个。 */
+		function syncUpstream(role, uri, outbound) {
 			var prefix = role === 'cn' ? 'cn' : 'remote';
-			var existing = uci.sections('honk', 'dns_upstream').filter(function(x) { return x.role === role; });
-			existing.forEach(function(x) { uci.remove('honk', x['.name']); });
-			if (!uris.length) return;
-			uris.forEach(function(uri, idx) {
-				var sid = prefix + '_' + (idx + 1);
-				uci.set('honk', sid, 'dns_upstream');
-				uci.set('honk', sid, 'enabled', '1');
-				uci.set('honk', sid, 'name', sid);
-				uci.set('honk', sid, 'role', role);
-				uci.set('honk', sid, 'uri', uri);
-				if (outbound) uci.set('honk', sid, 'outbound', outbound);
-			});
+			uci.sections('honk', 'dns_upstream')
+				.filter(function(x) { return x.role === role; })
+				.forEach(function(x) { uci.remove('honk', x['.name']); });
+			if (!uri) return;
+			var sid = prefix + '_1';
+			uci.set('honk', sid, 'dns_upstream');
+			uci.set('honk', sid, 'enabled', '1');
+			uci.set('honk', sid, 'name', sid);
+			uci.set('honk', sid, 'role', role);
+			uci.set('honk', sid, 'uri', uri);
+			if (outbound) uci.set('honk', sid, 'outbound', outbound);
 		}
 
-		o = ds.taboption('dns_servers', form.MultiValue, '_cn_dns', _('国内 DNS'),
-			_('国内域名解析用它。选完会同步到下面的上游表。'));
+		o = ds.taboption('dns_servers', form.ListValue, '_cn_dns', _('国内 DNS'),
+			_('国内域名解析用它。选「自定义」后在下方填写。'));
 		Object.keys(CN_DNS).forEach(function(k) { o.value(k, CN_DNS[k]); });
+		o.value('custom', _('自定义（在下方填写）'));
 		o.cfgvalue = function() {
-			return uci.sections('honk', 'dns_upstream')
-				.filter(function(x) { return x.role === 'cn' && x.enabled === '1'; })
-				.map(function(x) { return x.uri; });
+			var sec = uci.sections('honk', 'dns_upstream').filter(function(x) { return x.role === 'cn' && x.enabled === '1'; });
+			if (!sec.length) return '';
+			var uri = sec[0].uri || '';
+			return Object.prototype.hasOwnProperty.call(CN_DNS, uri) ? uri : 'custom';
 		};
-		o.write = function(section_id, value) { syncUpstreams('cn', value || [], 'direct'); };
+		o.write = function(section_id, value) {
+			if (value && value !== 'custom') syncUpstream('cn', value, 'direct');
+		};
 		o.rmempty = false;
 
-		o = ds.taboption('dns_servers', form.MultiValue, '_remote_dns', _('国外 DNS'),
-			_('其余域名用它。选完会同步到下面的上游表。'));
-		Object.keys(REMOTE_DNS).forEach(function(k) { o.value(k, REMOTE_DNS[k]); });
+		o = ds.taboption('dns_servers', form.Value, '_cn_custom', _('自定义国内 DNS'),
+			_('填完整 URI，例如 udp://223.5.5.5:53 或 https://dns.example/dns-query'));
+		o.placeholder = 'udp://223.5.5.5:53';
 		o.cfgvalue = function() {
-			return uci.sections('honk', 'dns_upstream')
-				.filter(function(x) { return x.role === 'remote' && x.enabled === '1'; })
-				.map(function(x) { return x.uri; });
+			var sec = uci.sections('honk', 'dns_upstream').filter(function(x) { return x.role === 'cn' && x.enabled === '1'; });
+			if (!sec.length) return '';
+			var uri = sec[0].uri || '';
+			return Object.prototype.hasOwnProperty.call(CN_DNS, uri) ? '' : uri;
 		};
-		o.write = function(section_id, value) { syncUpstreams('remote', value || [], null); };
+		o.write = function(section_id, value) {
+			if (value) syncUpstream('cn', value, 'direct');
+		};
+		o.rmempty = true;
+
+		o = ds.taboption('dns_servers', form.ListValue, '_remote_dns', _('国外 DNS'),
+			_('其余域名用它。选「自定义」后在下方填写。'));
+		Object.keys(REMOTE_DNS).forEach(function(k) { o.value(k, REMOTE_DNS[k]); });
+		o.value('custom', _('自定义（在下方填写）'));
+		o.cfgvalue = function() {
+			var sec = uci.sections('honk', 'dns_upstream').filter(function(x) { return x.role === 'remote' && x.enabled === '1'; });
+			if (!sec.length) return '';
+			var uri = sec[0].uri || '';
+			return Object.prototype.hasOwnProperty.call(REMOTE_DNS, uri) ? uri : 'custom';
+		};
+		o.write = function(section_id, value) {
+			if (value && value !== 'custom') syncUpstream('remote', value, null);
+		};
 		o.rmempty = false;
+
+		o = ds.taboption('dns_servers', form.Value, '_remote_custom', _('自定义国外 DNS'),
+			_('填完整 URI，例如 udp://1.1.1.1:53 或 https://dns.example/dns-query'));
+		o.placeholder = 'udp://1.1.1.1:53';
+		o.cfgvalue = function() {
+			var sec = uci.sections('honk', 'dns_upstream').filter(function(x) { return x.role === 'remote' && x.enabled === '1'; });
+			if (!sec.length) return '';
+			var uri = sec[0].uri || '';
+			return Object.prototype.hasOwnProperty.call(REMOTE_DNS, uri) ? '' : uri;
+		};
+		o.write = function(section_id, value) {
+			if (value) syncUpstream('remote', value, null);
+		};
+		o.rmempty = true;
 
 		/* 上游列表 */
 		var upv = ds.taboption('dns_servers', form.SectionValue, '_upstreams', form.GridSection, 'dns_upstream', null);
