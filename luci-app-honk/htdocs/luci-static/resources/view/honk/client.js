@@ -48,7 +48,7 @@ return view.extend({
 		/* tab 顺序就是这里的声明顺序 */
 		s.tab('routing', _('路由设置'));
 		s.tab('dns', _('DNS'));
-		s.tab('nodes', _('节点与组'));
+		s.tab('nodes', _('节点与分组'));
 		s.tab('ssid', _('多SSID分流'));
 		s.tab('control', _('访问控制'));
 		s.tab('diversion', _('分流控制'));
@@ -137,7 +137,7 @@ return view.extend({
 		o.placeholder = '/var/lib/honk';
 		o.rmempty = true;
 
-		/* ================= 节点与组 ================= */
+		/* ================= 节点与分组 ================= */
 
 		var nv = s.taboption('nodes', form.SectionValue, '_nodes', form.GridSection, 'node', null);
 		var nodesSec = nv.subsection;
@@ -155,13 +155,10 @@ return view.extend({
 		o = nodesSec.option(form.Value, 'name', _('名称'));
 		o.placeholder = 'hk01';
 		o.rmempty = false;
-		o.description = _('供组成员和接口引用，简短且不要频繁改。');
 
 		o = nodesSec.option(form.Value, 'uri', _('分享链接'));
 		o.placeholder = 'vless://uuid@host:443?security=tls&sni=host#name';
 		o.rmempty = false;
-		o.description = _('每个节点一条链接。支持 vless / vmess / trojan / hysteria2 / tuic / ' +
-			'shadowsocks / anytls / juicity / socks5。');
 
 		var gv = s.taboption('nodes', form.SectionValue, '_groups', form.GridSection, 'group', null);
 		var groupsSec = gv.subsection;
@@ -175,8 +172,6 @@ return view.extend({
 		o = groupsSec.option(form.Value, 'name', _('组名'));
 		o.placeholder = 'proxy';
 		o.rmempty = false;
-		o.description = _('路由目标只能是 direct / block / 组。' +
-			'哪怕组里只有一个节点，也必须先成组。');
 
 		o = groupsSec.option(form.ListValue, 'policy', _('策略'));
 		o.value('selector', _('手动选择'));
@@ -187,8 +182,7 @@ return view.extend({
 		o.default = 'urltest';
 		o.rmempty = false;
 
-		o = groupsSec.option(form.DynamicList, 'members', _('成员'),
-			_('节点或其它组。每个成员都会保持热连接，组别开太大。'));
+		o = groupsSec.option(form.DynamicList, 'members', _('成员'));
 		(data.nodes || []).forEach(function(n) {
 			o.value(n.name, n.name);
 		});
@@ -248,8 +242,8 @@ return view.extend({
 		o.placeholder = 'jy01';
 		o.rmempty = false;
 
-		o = ssr.option(form.Value, 'source', _('源网段'),
-			_('该 SSID 的网段，例如 188.181.1.0/24。'));
+		o = ssr.option(form.Value, 'source', _('源网段'));
+		o.placeholder = '188.181.1.0/24';
 		o.placeholder = '188.181.1.0/24';
 		o.datatype = 'cidr4';
 		o.rmempty = false;
@@ -260,16 +254,13 @@ return view.extend({
 		});
 		o.rmempty = false;
 
-		o = ssr.option(form.Value, 'interface', _('接口'),
-			_('可选的 wifiNN 接口。填了会追加到 lan_interface，' +
-			  '否则 honk 看不到这个网段的流量。'));
+		o = ssr.option(form.Value, 'interface', _('接口'));
 		(data.ifaces || []).forEach(function(i) {
 			o.value(i, i);
 		});
 		o.rmempty = true;
 
-		o = ssr.option(form.ListValue, 'dns', _('DNS 上游'),
-			_('可选。填上面某个上游的名字，该网段的查询就走它。'));
+		o = ssr.option(form.ListValue, 'dns', _('DNS 上游'));
 		uci.sections('honk', 'dns_upstream').forEach(function(u) {
 			if (u.name)
 				o.value(u.name, u.name);
@@ -462,8 +453,7 @@ return view.extend({
 		o.default = 'direct';
 		o.rmempty = false;
 
-		o = dr.option(form.TextValue, '_domains', _('域名'),
-			_('一行一个。'));
+		o = dr.option(form.TextValue, '_domains', _('域名'));
 		o.rows = 8;
 		o.monospace = true;
 		o.rmempty = true;
