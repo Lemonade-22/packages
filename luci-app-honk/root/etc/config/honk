@@ -29,6 +29,7 @@ config honk 'infra'
 	option cache_file '1'
 	option block_https_rr '1'
 	option ad_block '1'
+	option ad_block_file '/etc/honk/adblock.list'
 
 # 上游 DNS。role: cn / remote
 config dns_upstream 'cn_ali'

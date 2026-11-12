@@ -46,6 +46,8 @@ STALE_TTL="$(q infra.optimistic_stale_reply_ttl)"
 CACHE_FILE="$(q infra.cache_file)"
 BLOCK_HTTPS="$(q infra.block_https_rr)"
 AD_BLOCK="$(q infra.ad_block)"
+AB_FILE="$(q infra.ad_block_file)"
+[ -n "$AB_FILE" ] || AB_FILE="/etc/honk/adblock.list"
 
 mkdir -p "$(dirname "$OUT")"
 
@@ -238,7 +240,31 @@ mkdir -p "$(dirname "$OUT")"
   if [ "$ROUTING_MODE" = "bypass_mainland_china" ] && [ -n "$cn_up" ]; then
     echo "            qname(geosite: geolocation-cn) -> $(sq "$cn_up")"
   fi
-  [ "$AD_BLOCK" = "1" ] && echo "            qname(geosite: category-ads-all) -> reject"
+  if [ "$AD_BLOCK" = "1" ]; then
+    echo "            qname(geosite: category-ads-all) -> reject"
+    # 自定义列表：一行一个域名，按后缀匹配。规则一行不能无限长，
+    # 所以按 40 个一组拆成多条。
+    if [ -s "$AB_FILE" ]; then
+      ab_batch=""
+      ab_n=0
+      while IFS= read -r ab_d; do
+        ab_d="$(printf '%s' "$ab_d" | tr -d '[:space:]')"
+        case "$ab_d" in ''|'#'*) continue ;; esac
+        if [ -z "$ab_batch" ]; then
+          ab_batch="suffix: $ab_d"
+        else
+          ab_batch="$ab_batch, suffix: $ab_d"
+        fi
+        ab_n=$((ab_n + 1))
+        if [ "$ab_n" -ge 40 ]; then
+          echo "            qname($ab_batch) -> reject"
+          ab_batch=""
+          ab_n=0
+        fi
+      done < "$AB_FILE"
+      [ -n "$ab_batch" ] && echo "            qname($ab_batch) -> reject"
+    fi
+  fi
   [ "$BLOCK_HTTPS" = "1" ] && echo "            qtype(https, svcb) -> reject"
   fb="$remote_up"
   [ -n "$fb" ] || fb="$cn_up"

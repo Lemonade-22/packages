@@ -469,6 +469,23 @@ return view.extend({
 		o.default = '1';
 		o.rmempty = false;
 
+		/* 自定义广告域名：写文件，生成器按 40 个一组拆成 domain(suffix:) 规则 */
+		o = ds.taboption('dns_advanced', form.TextValue, '_adblock_list', _('自定义广告域名'),
+			_('一行一个域名，按后缀匹配，所以 example.com 也覆盖 a.example.com。' +
+			  '存在 /etc/honk/adblock.list，与上面的 geosite 广告分类叠加生效。'));
+		o.rows = 10;
+		o.monospace = true;
+		o.cfgvalue = function() {
+			return fs.read('/etc/honk/adblock.list').catch(function() { return ''; });
+		};
+		o.write = function(section_id, value) {
+			return fs.write('/etc/honk/adblock.list', String(value || ''));
+		};
+		o.remove = function() {
+			return fs.write('/etc/honk/adblock.list', '');
+		};
+		o.placeholder = 'doubleclick.net\nads.example.com\ntracker.example.org';
+
 		o = ds.taboption('dns_advanced', form.Flag, 'ad_block', _('广告过滤'),
 			_('在到达任何上游之前拒绝广告域名。'));
 		o.default = '1';

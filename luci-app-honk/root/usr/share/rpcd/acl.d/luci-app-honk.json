@@ -5,6 +5,7 @@
 			"file": {
 				"/etc/honk/config.dae": [ "read" ],
 				"/etc/honk/custom.rules": [ "read" ],
+				"/etc/honk/adblock.list": [ "read" ],
 				"/var/log/honk.log": [ "read" ]
 			},
 			"ubus": {
