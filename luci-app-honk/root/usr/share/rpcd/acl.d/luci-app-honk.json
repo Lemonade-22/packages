@@ -32,6 +32,9 @@
 				],
 				"/etc/init.d/honk": [
 					"exec"
+				],
+				"/usr/share/honk/honk-api.sh": [
+					"exec"
 				]
 			},
 			"ubus": {
