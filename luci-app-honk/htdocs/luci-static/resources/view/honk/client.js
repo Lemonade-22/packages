@@ -342,7 +342,7 @@ return view.extend({
 			if (outbound) uci.set('honk', sid, 'outbound', outbound);
 		}
 
-		o = ds.taboption('dns_servers', form.ListValue, '_cn_dns', _('国内 DNS'),
+		o = ds.taboption('dns_servers', form.ListValue, 'cn_dns_preset', _('国内 DNS'),
 			_('国内域名解析用它。选「自定义」后在下方填写。'));
 		Object.keys(CN_DNS).forEach(function(k) { o.value(k, CN_DNS[k]); });
 		o.value('custom', _('自定义（在下方填写）'));
@@ -353,6 +353,7 @@ return view.extend({
 			return Object.prototype.hasOwnProperty.call(CN_DNS, uri) ? uri : 'custom';
 		};
 		o.write = function(section_id, value) {
+			uci.set('honk', 'infra', 'cn_dns_preset', value || '');
 			if (value && value !== 'custom') syncUpstream('cn', value, 'direct');
 		};
 		o.rmempty = false;
@@ -360,6 +361,7 @@ return view.extend({
 		o = ds.taboption('dns_servers', form.Value, '_cn_custom', _('自定义国内 DNS'),
 			_('填完整 URI，例如 udp://223.5.5.5:53 或 https://dns.example/dns-query'));
 		o.placeholder = 'udp://223.5.5.5:53';
+		o.depends('cn_dns_preset', 'custom');
 		o.cfgvalue = function() {
 			var sec = uci.sections('honk', 'dns_upstream').filter(function(x) { return x.role === 'cn' && x.enabled === '1'; });
 			if (!sec.length) return '';
@@ -371,7 +373,7 @@ return view.extend({
 		};
 		o.rmempty = true;
 
-		o = ds.taboption('dns_servers', form.ListValue, '_remote_dns', _('国外 DNS'),
+		o = ds.taboption('dns_servers', form.ListValue, 'remote_dns_preset', _('国外 DNS'),
 			_('其余域名用它。选「自定义」后在下方填写。'));
 		Object.keys(REMOTE_DNS).forEach(function(k) { o.value(k, REMOTE_DNS[k]); });
 		o.value('custom', _('自定义（在下方填写）'));
@@ -382,6 +384,7 @@ return view.extend({
 			return Object.prototype.hasOwnProperty.call(REMOTE_DNS, uri) ? uri : 'custom';
 		};
 		o.write = function(section_id, value) {
+			uci.set('honk', 'infra', 'remote_dns_preset', value || '');
 			if (value && value !== 'custom') syncUpstream('remote', value, null);
 		};
 		o.rmempty = false;
@@ -389,6 +392,7 @@ return view.extend({
 		o = ds.taboption('dns_servers', form.Value, '_remote_custom', _('自定义国外 DNS'),
 			_('填完整 URI，例如 udp://1.1.1.1:53 或 https://dns.example/dns-query'));
 		o.placeholder = 'udp://1.1.1.1:53';
+		o.depends('remote_dns_preset', 'custom');
 		o.cfgvalue = function() {
 			var sec = uci.sections('honk', 'dns_upstream').filter(function(x) { return x.role === 'remote' && x.enabled === '1'; });
 			if (!sec.length) return '';
