@@ -810,6 +810,25 @@ return view.extend({
 				])
 			]);
 
+			var updBtn = E('button', {
+				'class': 'btn cbi-button cbi-button-action',
+				'click': ui.createHandlerFn(this, function(ev) {
+					ev.preventDefault();
+					var out = E('pre', {
+						'class': 'cbi-input-textarea',
+						'style': 'height:12em;overflow:auto;white-space:pre-wrap;font-family:monospace;font-size:12px;'
+					}, _('正在下载 GeoIP / GeoSite…'));
+					ui.showModal(_('更新规则资源'), [out, E('div', { 'class': 'right' },
+						E('button', { 'class': 'btn', 'click': ui.hideModal }, _('关闭')))]);
+					return fs.exec('/usr/share/honk/update-geo.sh').then(function(res) {
+						out.textContent = (res.stdout || '') + (res.stderr || '');
+						return L.resolveDefault(fs.exec('/etc/init.d/honk reload'), {});
+					}).then(function() {
+						out.textContent += '\n\nhonk 已重载。';
+					}).catch(function(e) { out.textContent = String(e); });
+				})
+			}, _('更新全部'));
+
 			return Promise.all(files.map(function(item) {
 				return fs.stat('/usr/share/honk/geo/' + item[0])
 					.catch(function() { return null; });
@@ -832,7 +851,10 @@ return view.extend({
 						E('td', { 'class': 'td', 'colspan': 4 },
 							_('一个都没有。geo 规则会静默失效，honk 只打 WARN 不会报错。'))
 					]));
-				return table;
+				return E('div', {}, [
+					E('div', { 'style': 'margin-bottom:8px' }, [ updBtn ]),
+					table
+				]);
 			});
 		};
 
