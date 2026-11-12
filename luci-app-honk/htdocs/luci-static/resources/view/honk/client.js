@@ -81,7 +81,7 @@ return view.extend({
 		o.value('off', _('不处理'));
 		o.default = 'block';
 		o.rmempty = false;
-		o.description = _('\u24d8 建议阻断。阻断会丢弃 UDP 443，浏览器和应用因此回落到 TCP/TLS；' +
+		o.description = _('建议阻断。阻断会丢弃 UDP 443，浏览器和应用因此回落到 TCP/TLS；' +
 			'若设为直连，这部分流量就从本地宽带出去，等于多了一条不受控的出口。');
 
 		o = s.taboption('routing', form.ListValue, 'ipv6_mode', _('IPV6'));
@@ -91,7 +91,7 @@ return view.extend({
 		o.value('block_global', _('全局 IPv6 阻断'));
 		o.default = 'block';
 		o.rmempty = false;
-		o.description = _('\u24d8 代理：不生成规则，v6 跟随 fallback 进入节点。' +
+		o.description = _('代理：不生成规则，v6 跟随 fallback 进入节点。' +
 			'直连：ipversion(6) -> direct 置于最前，v6 从本地宽带出去。' +
 			'阻断（大陆除外）：ipversion(6) -> block 排在 geosite-cn/geoip-cn 之后，国内 v6 仍直连。' +
 			'全局阻断：ipversion(6) -> block 置于最前，任何 v6 都不出网。' +
@@ -379,8 +379,8 @@ return view.extend({
 		o.value('1', _('仅列表内的客户端走代理'));
 		o.default = '0';
 		o.rmempty = false;
-		o.description = _('"Only listed" turns the proxy list into a whitelist: clients outside it ' +
-			'are forced direct, even if the domain rules would proxy them.');
+		o.description = _('选了“仅列表内的客户端走代理”时，代理列表变成白名单：' +
+			'列表之外的客户端一律强制直连，哪怕域名规则本来会让它走代理。');
 
 		o = cs.option(form.DynamicList, 'lan_proxy', _('局域网源地址 → 代理'),
 			_('网段或单个地址，按 sip() 匹配。'));
