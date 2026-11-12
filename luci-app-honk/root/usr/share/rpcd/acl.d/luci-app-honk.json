@@ -5,7 +5,7 @@
 			"file": {
 				"/etc/honk/config.dae": [ "read" ],
 				"/etc/honk/custom.rules": [ "read" ],
-				"/var/lib/honk/honk.log": [ "read" ]
+				"/var/log/honk.log": [ "read" ]
 			},
 			"ubus": {
 				"service": [ "list" ]

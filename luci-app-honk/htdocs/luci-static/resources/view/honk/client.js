@@ -4,6 +4,7 @@
 'require uci';
 'require ui';
 'require fs';
+'require poll';
 
 /*
  * luci-app-honk
@@ -16,7 +17,11 @@
  */
 return view.extend({
 	load: function() {
-		return Promise.all([ uci.load('honk'), uci.load('network') ]).then(function() {
+		return Promise.all([
+			uci.load('honk'),
+			uci.load('network'),
+			fs.read('/var/log/honk.log').catch(function() { return ''; })
+		]).then(function(res) {
 			var groups = uci.sections('honk', 'group').map(function(g) {
 				return (g.name || g['.name'] || '').trim();
 			}).filter(function(n) { return n.length > 0; });
@@ -32,7 +37,7 @@ return view.extend({
 				.filter(function(n) { return /^wifi\d+$/.test(n); })
 				.sort();
 
-			return { groups: groups, nodes: nodes, ifaces: ifaces };
+			return { groups: groups, nodes: nodes, ifaces: ifaces, log: res[2] || '' };
 		});
 	},
 
@@ -472,6 +477,36 @@ return view.extend({
 					_('honk 在重载时写出 /etc/honk/config.dae。要看实时流量、节点延迟' +
 					  '和 DNS 统计，装 doona（原生 API）或 zashboard（Clash API）——' +
 					  '两者都是 honk 项目提供的一键安装。'))
+			]);
+		};
+
+		/* 日志观察窗：poll 每 5 秒重读一次，只读 */
+		o = s.taboption('status', form.DummyValue, '_log', _('运行日志'));
+		o.rawhtml = true;
+		o.cfgvalue = function() {
+			var box = E('pre', {
+				'class': 'cbi-input-textarea',
+				'style': 'height:22em;overflow:auto;white-space:pre-wrap;word-break:break-all;' +
+					'font-family:monospace;font-size:12px;margin:0;'
+			}, data.log || _('（暂无日志）'));
+			poll.add(function() {
+				return fs.read('/var/log/honk.log').then(function(txt) {
+					box.textContent = txt || _('（暂无日志）');
+					box.scrollTop = box.scrollHeight;
+				}).catch(function() {});
+			}, 5);
+			return box;
+		};
+
+		/* 仪表盘：honk 自己不带 Web UI，第三方要另装 */
+		o = s.taboption('status', form.DummyValue, '_dash', _('仪表盘'));
+		o.rawhtml = true;
+		o.cfgvalue = function() {
+			return E('div', { 'class': 'cbi-value-description' }, [
+				E('p', {}, _('doona：honk 官方 Web 界面，走原生 API，能看到实时连接与节点延迟。')),
+				E('p', {}, _('zashboard：基于 Clash API 的通用界面，观感更接近 Clash 系工具。')),
+				E('p', {}, _('两者都不随本插件安装。honk-core 起来之后，' +
+					'用 honk 项目提供的安装包自行安装即可；装好后从这里访问对应的本体地址。'))
 			]);
 		};
 
