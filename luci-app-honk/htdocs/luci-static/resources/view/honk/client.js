@@ -390,8 +390,18 @@ return view.extend({
 		o.write = function(section_id, value) { syncOne('remote', value || '', null); };
 		o.rmempty = true;
 
-		/* 上游列表 */
-		var upv = ds.taboption('dns_servers', form.SectionValue, '_upstreams', form.GridSection, 'dns_upstream', null);
+		/* 上游列表：给需要第三个上游、或要改出站/角色的场景用。
+		   上面两个下拉写入的 cn_1 / remote_1 也会出现在这里。 */
+		o = ds.taboption('dns_advanced', form.DummyValue, '_upstreams_hint', null);
+		o.rawhtml = true;
+		o.cfgvalue = function() {
+			return E('div', { 'class': 'cbi-value-description' },
+				_('上面「DNS服务器」页的两个下拉会写成 cn_1 和 remote_1。' +
+				  '这张表用于额外场景：加第三个上游、改它的出站组或角色。' +
+				  '改 role 会覆盖下拉的选择。'));
+		};
+
+		var upv = ds.taboption('dns_advanced', form.SectionValue, '_upstreams', form.GridSection, 'dns_upstream', null);
 		var up = upv.subsection;
 		up.addremove = true;
 		up.sortable = true;
