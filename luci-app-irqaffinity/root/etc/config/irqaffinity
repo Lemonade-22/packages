@@ -1,0 +1,8 @@
+# luci-app-irqaffinity persistent rules
+# Rules are written by the web UI ("save") and replayed at boot by
+# /etc/init.d/irqaffinity via: /usr/libexec/irqaffinity.sh apply_saved
+#
+# mask is a hex cpu bitmask (2 = core1, 3 = core0+1, f = core0-3)
+
+config settings 'global'
+	option enabled '1'

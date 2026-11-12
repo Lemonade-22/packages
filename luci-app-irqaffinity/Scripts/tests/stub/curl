@@ -1,0 +1,38 @@
+#!/bin/bash
+# stub curl: emulates a mirror that drops transfers part-way and can change
+# its artifact fingerprint (ETag) to simulate an in-place rebuild.
+OUT=""; URL=""; RESUME=0; HEAD=0; prev=""
+for a in "$@"; do
+  case "$a" in
+    -sI|-I|--head|-Is) HEAD=1; prev=""; continue ;;
+    -o) prev=o; continue ;;
+    -C) prev=c; continue ;;
+  esac
+  if [ "$prev" = o ]; then OUT="$a"; prev=""
+  elif [ "$prev" = c ]; then [ "$a" = "-" ] && RESUME=1; prev=""
+  fi
+  case "$a" in http*) URL="$a" ;; esac
+done
+case "$URL" in
+  *bad*) echo "curl: (22) The requested URL returned error: 404" >&2; exit 22 ;;
+esac
+REMOTE="${STUB_REMOTE:?STUB_REMOTE unset}"
+total=$(wc -c < "$REMOTE")
+if [ "$HEAD" = 1 ]; then
+  printf 'HTTP/1.1 200 OK\r\n'
+  printf 'Content-Length: %s\r\n' "$total"
+  printf 'ETag: "%s"\r\n' "${STUB_ETAG:-none}"
+  printf 'Accept-Ranges: bytes\r\n\r\n'
+  exit 0
+fi
+CHUNK="${STUB_CHUNK:-30000}"
+off=0
+if [ "$RESUME" = 1 ] && [ -f "$OUT" ]; then off=$(wc -c < "$OUT"); fi
+if [ "$off" -ge "$total" ]; then echo "curl: (33) range not satisfiable" >&2; exit 33; fi
+end=$((off + CHUNK)); [ "$end" -gt "$total" ] && end=$total
+tail -c +$((off + 1)) "$REMOTE" | head -c $((end - off)) >> "$OUT"
+if [ "$end" -lt "$total" ]; then
+  echo "curl: (18) transfer closed with $((total - end)) bytes remaining to read" >&2
+  exit 18
+fi
+exit 0

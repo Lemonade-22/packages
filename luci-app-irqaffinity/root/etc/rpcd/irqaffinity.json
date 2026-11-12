@@ -1,0 +1,29 @@
+{
+	"irqaffinity": {
+		"list": {
+			"call": "/bin/sh /usr/libexec/irqaffinity.sh list"
+		},
+		"apply": {
+			"call": "/bin/sh /usr/libexec/irqaffinity.sh apply",
+			"param": {
+				"mode":  "string",
+				"irq":   "string",
+				"iface": "string",
+				"mask":  "string"
+			}
+		},
+		"save": {
+			"call": "/bin/sh /usr/libexec/irqaffinity.sh save",
+			"param": {
+				"iface": "string",
+				"mask":  "string"
+			}
+		},
+		"delete": {
+			"call": "/bin/sh /usr/libexec/irqaffinity.sh delete",
+			"param": {
+				"iface": "string"
+			}
+		}
+	}
+}

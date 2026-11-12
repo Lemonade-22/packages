@@ -1,0 +1,14 @@
+{
+	"admin/network/static-gw": {
+		"title": "静态地址绑定",
+		"order": 50,
+		"action": {
+			"type": "view",
+			"path": "network/static-gw"
+		},
+		"depends": {
+			"acl": [ "luci-app-static-gw" ]
+		}
+	}
+}
+

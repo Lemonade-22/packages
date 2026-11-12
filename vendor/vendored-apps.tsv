@@ -1,0 +1,5 @@
+# 从独立仓库搬进本仓的插件清单：目录<TAB>上游仓库<TAB>分支
+# 只有这张表里列出的目录，vendor/sync-vendored-apps.sh 才允许写。
+# 新增插件 = 在这里加一行 + 直接跑一次同步，无需改脚本。
+luci-app-static-gw	https://github.com/Lemonade-22/luci-app-static-gw.git	main
+luci-app-irqaffinity	https://github.com/Lemonade-22/luci-app-irqaffinity.git	main

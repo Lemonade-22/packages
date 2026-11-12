@@ -1,0 +1,15 @@
+{
+	"luci-app-static-gw": {
+		"description": "Grant access to static address binding (per-host gateway/DNS)",
+		"read": {
+			"ubus": {
+				"luci-rpc": [ "getDHCPLeases", "getDUIDHints", "getHostHints", "getNetworkDevices" ],
+				"network": [ "getNetwork", "getNetworks" ]
+			},
+			"uci": [ "dhcp", "network" ]
+		},
+		"write": {
+			"uci": [ "dhcp" ]
+		}
+	}
+}

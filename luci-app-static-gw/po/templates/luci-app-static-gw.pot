@@ -1,0 +1,223 @@
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+
+msgid "（来自接口配置）"
+msgstr ""
+
+msgid "/etc/config/network 中未找到 LAN 接口"
+msgstr ""
+
+msgid "1 小时"
+msgstr ""
+
+msgid "12 小时"
+msgstr ""
+
+msgid "24 小时"
+msgstr ""
+
+msgid "30 分钟"
+msgstr ""
+
+msgid "5 分钟"
+msgstr ""
+
+msgid "7 天"
+msgstr ""
+
+msgid "必须填写固定 IPv4 地址"
+msgstr ""
+
+msgid "必须填写主机名或 MAC 地址"
+msgstr ""
+
+msgid "编辑静态绑定"
+msgstr ""
+
+msgid "编辑已禁用："
+msgstr ""
+
+msgid "不能绑定路由器自身地址"
+msgstr ""
+
+msgid "不能使用网络地址或广播地址"
+msgstr ""
+
+msgid "操作"
+msgstr ""
+
+msgid "当前持有 DHCP 租约的设备。点击“设为静态”会暂存该地址的固定绑定，再点“保存并应用”生效。"
+msgstr ""
+
+msgid "当前没有活动的 DHCP 租约。"
+msgstr ""
+
+msgid "地址不在 LAN 子网内"
+msgstr ""
+
+msgid "地址当前已被另一台设备租用"
+msgstr ""
+
+msgid "该客户端使用的 DNS 服务器 IPv4 地址。留空则使用上方的网关地址。"
+msgstr ""
+
+msgid "该设备已有静态绑定。"
+msgstr ""
+
+msgid "该租约没有可用的 MAC 地址。"
+msgstr ""
+
+msgid "固定 IPv4"
+msgstr ""
+
+msgid "继承地址池"
+msgstr ""
+
+msgid "继承系统"
+msgstr ""
+
+msgid "继承系统（留空）"
+msgstr ""
+
+msgid "检测到多个 dnsmasq 实例"
+msgstr ""
+
+msgid "将固定 IPv4 地址绑定到 MAC，并可为指定客户端下发自定义网关（DHCP option 3）和 DNS（option 6）。"
+msgstr ""
+
+msgid "仅为该客户端下发 DNS 服务器（DHCP option 6）。"
+msgstr ""
+
+msgid "静态"
+msgstr ""
+
+msgid "静态绑定"
+msgstr ""
+
+msgid "静态地址绑定"
+msgstr ""
+
+msgid "可选。仅为该客户端覆盖 IPv4 网关（DHCP option 3）。留空则继承系统网关。"
+msgstr ""
+
+msgid "默认网关："
+msgstr ""
+
+msgid "设为静态"
+msgstr ""
+
+msgid "提示："
+msgstr ""
+
+msgid "网关"
+msgstr ""
+
+msgid "网关必须在 LAN 子网内"
+msgstr ""
+
+msgid "网关不能是网络地址或广播地址"
+msgstr ""
+
+msgid "网关不能与固定 IP 相同"
+msgstr ""
+
+msgid "未检测到，沿用接口配置"
+msgstr ""
+
+msgid "未能识别 LAN 的 DHCP 地址池配置，因此地址池范围未知。仍可正常创建和编辑绑定。"
+msgstr ""
+
+msgid "无法确定 LAN 子网"
+msgstr ""
+
+msgid "无效的 IPv4 地址"
+msgstr ""
+
+msgid "无效的 MAC 地址"
+msgstr ""
+
+msgid "系统默认（未确定）"
+msgstr ""
+
+msgid "需要有效的 MAC 地址"
+msgstr ""
+
+msgid "已暂存"
+msgstr ""
+
+msgid "已暂存 %s 的静态绑定。请点击“保存并应用”提交。"
+msgstr ""
+
+msgid "永久"
+msgstr ""
+
+msgid "永久"
+msgstr ""
+
+msgid "由其他规则决定"
+msgstr ""
+
+msgid "与网关相同"
+msgstr ""
+
+msgid "在线设备"
+msgstr ""
+
+msgid "只读（请在官方 DHCP 页面管理）"
+msgstr ""
+
+msgid "主机名"
+msgstr ""
+
+msgid "状态"
+msgstr ""
+
+msgid "自定义 DNS"
+msgstr ""
+
+msgid "租期"
+msgstr ""
+
+msgid "租期格式无效（例如 12h、7d）"
+msgstr ""
+
+msgid "租约到期"
+msgstr ""
+
+msgid "DHCP 地址池："
+msgstr ""
+
+msgid "DNS 服务器"
+msgstr ""
+
+msgid "IPv4 地址"
+msgstr ""
+
+msgid "IPv4 已被其他绑定使用"
+msgstr ""
+
+msgid "LAN 接口未配置为静态 IPv4"
+msgstr ""
+
+msgid "LAN 没有活动的 DHCPv4 配置"
+msgstr ""
+
+msgid "LAN 未配置 IPv4 地址"
+msgstr ""
+
+msgid "LAN："
+msgstr ""
+
+msgid "MAC 必须是有效的单播地址"
+msgstr ""
+
+msgid "MAC 地址"
+msgstr ""
+
+msgid "MAC 地址已被其他绑定使用"
+msgstr ""
+
+
+msgid "（未保存）"
+msgstr ""

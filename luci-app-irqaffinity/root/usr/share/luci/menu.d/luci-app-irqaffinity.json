@@ -1,0 +1,13 @@
+{
+	"admin/network/irqaffinity": {
+		"title": "中断绑核",
+		"order": 55,
+		"action": {
+			"type": "view",
+			"path": "network/irqaffinity"
+		},
+		"depends": {
+			"acl": [ "luci-app-irqaffinity" ]
+		}
+	}
+}

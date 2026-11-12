@@ -1,0 +1,15 @@
+{
+	"luci-app-irqaffinity": {
+		"description": "Grant access to ethernet IRQ CPU affinity control",
+		"read": {
+			"ubus": {
+				"irqaffinity": [ "list" ]
+			}
+		},
+		"write": {
+			"ubus": {
+				"irqaffinity": [ "apply", "save", "delete" ]
+			}
+		}
+	}
+}

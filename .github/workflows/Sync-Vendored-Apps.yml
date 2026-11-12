@@ -1,0 +1,37 @@
+name: 同步自研插件
+
+on:
+  workflow_dispatch:
+  schedule:
+    # 中国时间 04:30，错开 02:00 的每日维护
+    - cron: '30 20 * * *'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sync-vendored-apps
+  cancel-in-progress: false
+  queue: max
+
+jobs:
+  sync:
+    name: 按映射表同步插件源码
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      PACKAGE_BRANCH: ${{ github.event.repository.default_branch }}
+    steps:
+      - name: 检出软件包仓库
+        uses: actions/checkout@main
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.repository.default_branch }}
+
+      - name: 配置提交身份
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+
+      - name: 同步插件目录
+        run: bash vendor/sync-vendored-apps.sh
