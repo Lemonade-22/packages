@@ -425,6 +425,11 @@ return view.extend({
 		o.default = '1';
 		o.rmempty = false;
 
+		o = ds.taboption('dns_advanced', form.Flag, 'ad_block', _('DNS 广告过滤'),
+			_('在到达任何上游之前拒绝广告域名。'));
+		o.default = '1';
+		o.rmempty = false;
+
 		/* 规则来源：跟 mosdns 一样用 DynamicList——每项一个可编辑输入框，
 		   底部下拉追加预设。值就是 URL 本身，也可以直接回车输入。 */
 		o = ds.taboption('dns_advanced', form.DynamicList, 'ad_block_source', _('广告过滤规则来源'),
@@ -477,11 +482,6 @@ return view.extend({
 			return fs.write('/etc/honk/adblock.list', '');
 		};
 		o.placeholder = 'doubleclick.net\nads.example.com\ntracker.example.org';
-
-		o = ds.taboption('dns_advanced', form.Flag, 'ad_block', _('广告过滤'),
-			_('在到达任何上游之前拒绝广告域名。'));
-		o.default = '1';
-		o.rmempty = false;
 
 		/* ================= 访问控制 ================= */
 
