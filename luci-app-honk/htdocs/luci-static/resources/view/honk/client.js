@@ -293,20 +293,40 @@ return view.extend({
 
 		/* 快捷选择：跟 MosDNS 一样，国内一个、国外一个 */
 		var CN_DNS = {
-			'https://dns.alidns.com/dns-query': '阿里 DNS',
-			'https://doh.pub/dns-query': '腾讯 DNS',
-			'https://doh.114dns.com/dns-query': '114 DNS',
-			'https://doh.baidu.com/dns-query': '百度 DNS',
-			'udp://223.5.5.5:53': '阿里 DNS（UDP）',
-			'udp://119.29.29.29:53': '腾讯 DNS（UDP）'
+			'udp://223.5.5.5:53': '阿里 223.5.5.5',
+			'udp://223.6.6.6:53': '阿里 223.6.6.6',
+			'udp://119.29.29.29:53': '腾讯 119.29.29.29',
+			'udp://182.254.116.116:53': '腾讯 182.254.116.116',
+			'udp://114.114.114.114:53': '114 DNS 114.114.114.114',
+			'udp://114.114.115.115:53': '114 DNS 114.114.115.115',
+			'udp://180.76.76.76:53': '百度 180.76.76.76',
+			'udp://119.6.6.6:53': '联通 119.6.6.6',
+			'udp://123.125.81.6:53': '联通 123.125.81.6',
+			'udp://101.226.4.6:53': '电信 101.226.4.6',
+			'udp://218.30.118.6:53': '电信 218.30.118.6',
+			'udp://1.2.4.8:53': '电信 1.2.4.8',
+			'udp://223.87.238.41:53': '移动 223.87.238.41',
+			'https://dns.alidns.com/dns-query': '阿里 DoH',
+			'https://doh.pub/dns-query': '腾讯 DoH',
+			'https://doh.114dns.com/dns-query': '114 DoH',
+			'https://doh.baidu.com/dns-query': '百度 DoH'
 		};
 		var REMOTE_DNS = {
-			'https://dns.cloudflare.com/dns-query': 'Cloudflare',
-			'https://dns.google/dns-query': 'Google',
-			'https://dns.quad9.net/dns-query': 'Quad9',
-			'https://dns.adguard-dns.com/dns-query': 'AdGuard',
-			'udp://1.1.1.1:53': 'Cloudflare（UDP）',
-			'udp://8.8.8.8:53': 'Google（UDP）'
+			'udp://1.1.1.1:53': 'Cloudflare 1.1.1.1',
+			'udp://1.0.0.1:53': 'Cloudflare 1.0.0.1',
+			'udp://8.8.8.8:53': 'Google 8.8.8.8',
+			'udp://8.8.4.4:53': 'Google 8.8.4.4',
+			'udp://9.9.9.9:53': 'Quad9 9.9.9.9',
+			'udp://149.112.112.112:53': 'Quad9 149.112.112.112',
+			'udp://208.67.222.222:53': 'OpenDNS 208.67.222.222',
+			'udp://208.67.220.220:53': 'OpenDNS 208.67.220.220',
+			'udp://94.140.14.14:53': 'AdGuard 94.140.14.14',
+			'udp://94.140.15.15:53': 'AdGuard 94.140.15.15',
+			'udp://76.76.2.0:53': 'Control D 76.76.2.0',
+			'https://dns.cloudflare.com/dns-query': 'Cloudflare DoH',
+			'https://dns.google/dns-query': 'Google DoH',
+			'https://dns.quad9.net/dns-query': 'Quad9 DoH',
+			'https://dns.adguard-dns.com/dns-query': 'AdGuard DoH'
 		};
 
 		function syncUpstream(cfg, uri, role, fallbackName) {
