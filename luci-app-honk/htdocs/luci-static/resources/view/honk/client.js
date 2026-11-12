@@ -46,39 +46,39 @@ return view.extend({
 		s.anonymous = true;
 
 		/* tab 顺序就是这里的声明顺序 */
-		s.tab('routing', _('Routing Settings'));
+		s.tab('routing', _('路由设置'));
 		s.tab('dns', _('DNS'));
-		s.tab('nodes', _('Nodes & Groups'));
-		s.tab('ssid', _('Per-SSID Routing'));
-		s.tab('control', _('Access Control'));
-		s.tab('diversion', _('Diversion'));
-		s.tab('custom', _('Custom Rules'));
-		s.tab('status', _('Status'));
+		s.tab('nodes', _('节点与组'));
+		s.tab('ssid', _('多SSID分流'));
+		s.tab('control', _('访问控制'));
+		s.tab('diversion', _('分流控制'));
+		s.tab('custom', _('自定义规则'));
+		s.tab('status', _('运行状态'));
 
-		var o = s.taboption('routing', form.Flag, 'enabled', _('Enable honk'));
+		var o = s.taboption('routing', form.Flag, 'enabled', _('启用 honk'));
 		o.rmempty = false;
 
-		o = s.taboption('routing', form.ListValue, 'main_group', _('Main node'));
-		o.value('nil', _('Disable'));
+		o = s.taboption('routing', form.ListValue, 'main_group', _('主节点'));
+		o.value('nil', _('禁用'));
 		(data.groups || []).forEach(function(g) {
 			o.value(g, g);
 		});
 		o.rmempty = false;
-		o.description = _('honk can only route to direct / block / a group, never to a bare node name.');
+		o.description = _('honk 的路由目标只能是 direct / block / 组，不能填单个节点名。');
 
-		o = s.taboption('routing', form.ListValue, 'routing_mode', _('Routing mode'));
-		o.value('bypass_mainland_china', _('Bypass mainland China'));
-		o.value('global', _('Global'));
+		o = s.taboption('routing', form.ListValue, 'routing_mode', _('路由模式'));
+		o.value('bypass_mainland_china', _('绕过中国大陆'));
+		o.value('global', _('全局'));
 		o.rmempty = false;
 
-		o = s.taboption('routing', form.ListValue, 'routing_port', _('Routing ports'));
-		o.value('', _('All ports'));
-		o.value('common', _('Common ports only (bypass P2P traffic)'));
+		o = s.taboption('routing', form.ListValue, 'routing_port', _('路由端口'));
+		o.value('', _('全部端口'));
+		o.value('common', _('仅常用端口（跳过 P2P）'));
 
-		o = s.taboption('routing', form.ListValue, 'quic_mode', _('QUIC handling'));
-		o.value('block', _('Block'));
-		o.value('direct', _('Direct'));
-		o.value('off', _('Leave alone'));
+		o = s.taboption('routing', form.ListValue, 'quic_mode', _('QUIC 处理'));
+		o.value('block', _('阻断'));
+		o.value('direct', _('直连'));
+		o.value('off', _('不处理'));
 		o.default = 'block';
 		o.rmempty = false;
 		o.description = E('span', {}, [
@@ -87,29 +87,29 @@ return view.extend({
 				         'QUIC going direct means that traffic leaves from your local ISP ' +
 				         'instead of the node, which is a second uncontrolled egress.')
 			}, '\u24d8 '),
-			_('Recommended: block. Switch to direct only if an app stalls badly without QUIC.')
+			_('建议阻断。只有某个应用离开 QUIC 就卡死时才改成直连。')
 		]);
 
 		o = s.taboption('routing', form.ListValue, 'ipv6_mode', _('IPV6'));
-		o.value('proxy', _('Proxy IPv6'));
-		o.value('direct', _('IPv6 direct'));
-		o.value('block', _('IPv6 block (China exempt)'));
-		o.value('block_global', _('Global IPv6 block'));
+		o.value('proxy', _('代理 IPv6'));
+		o.value('direct', _('IPv6 直连'));
+		o.value('block', _('IPv6 阻断（大陆除外）'));
+		o.value('block_global', _('全局 IPv6 阻断'));
 		o.default = 'block';
 		o.rmempty = false;
 		o.description = E('span', {}, [
 			E('span', {
 				title: _('honk has no IPv6 toggle: eBPF captures v4 and v6 alike, and the chosen ' +
 					'rule decides where v6 goes.') + '\n\n' +
-					_('Proxy  — no rule; v6 follows fallback and enters the node.') + '\n' +
-					_('Direct — ipversion(6) -> direct, emitted first; v6 leaves from your ISP.') + '\n' +
+					_('代理 —— 不生成规则，v6 跟随 fallback 进入节点。') + '\n' +
+					_('直连 —— ipversion(6) -> direct 置于最前，v6 从本地宽带出去。') + '\n' +
 					_('Block (China exempt) — ipversion(6) -> block after geosite-cn/geoip-cn, ' +
 					  'so Chinese v6 stays direct and the rest is dropped.') + '\n' +
-					_('Global block — ipversion(6) -> block emitted first; no v6 leaves at all.') + '\n\n' +
+					_('全局阻断 —— ipversion(6) -> block 置于最前，任何 v6 都不出网。') + '\n\n' +
 					_('Blocking only stops TCP/UDP from leaving over v6: WAN prefix delegation, ' +
 					  'RA/SLAAC and LAN-internal v6 keep working.')
 			}, '\u24d8 '),
-			_('Four ways to treat IPv6 traffic; hover the icon for the exact rule each one emits.')
+			_('四种 IPv6 处理方式，悬停图标可看各项实际生成的规则。')
 		])
 
 		/* infra 段：接口与运行时 */
@@ -117,23 +117,23 @@ return view.extend({
 		sv.depends('enabled', '1');
 		var ss = sv.subsection;
 
-		o = ss.option(form.Value, 'lan_interface', _('LAN interface'),
-			_('Interfaces carrying LAN-forwarded traffic. Leave empty to only proxy traffic from the router itself.'));
+		o = ss.option(form.Value, 'lan_interface', _('LAN 接口'),
+			_('承载局域网转发流量的接口。留空则只代理路由器本机流量。'));
 		o.placeholder = 'br-lan';
 		o.rmempty = true;
 
-		o = ss.option(form.Value, 'wan_interface', _('WAN interface'),
+		o = ss.option(form.Value, 'wan_interface', _('WAN 接口'),
 			_('Interface carrying the router\u2019s own traffic. "auto" follows the IPv4 default route.'));
 		o.placeholder = 'auto';
 		o.rmempty = true;
 
-		o = ss.option(form.ListValue, 'log_level', _('Log level'));
+		o = ss.option(form.ListValue, 'log_level', _('日志等级'));
 		['error', 'warn', 'info', 'debug'].forEach(function(v) {
 			o.value(v, v);
 		});
 		o.default = 'info';
 
-		o = ss.option(form.Value, 'data_dir', _('Runtime data directory'));
+		o = ss.option(form.Value, 'data_dir', _('运行时数据目录'));
 		o.placeholder = '/var/lib/honk';
 		o.rmempty = true;
 
@@ -148,16 +148,16 @@ return view.extend({
 			return uci.get('honk', section_id, 'name') || section_id;
 		};
 
-		o = nodesSec.option(form.Flag, 'enabled', _('Enable'));
+		o = nodesSec.option(form.Flag, 'enabled', _('启用'));
 		o.default = '1';
 		o.rmempty = false;
 
-		o = nodesSec.option(form.Value, 'name', _('Name'));
+		o = nodesSec.option(form.Value, 'name', _('名称'));
 		o.placeholder = 'hk01';
 		o.rmempty = false;
-		o.description = _('Used by group members and by the API. Keep it short and stable.');
+		o.description = _('供组成员和接口引用，简短且不要频繁改。');
 
-		o = nodesSec.option(form.Value, 'uri', _('Share link'));
+		o = nodesSec.option(form.Value, 'uri', _('分享链接'));
 		o.placeholder = 'vless://uuid@host:443?security=tls&sni=host#name';
 		o.rmempty = false;
 		o.description = _('One link per node. honk understands vless / vmess / trojan / hysteria2 / tuic / ' +
@@ -172,45 +172,45 @@ return view.extend({
 			return uci.get('honk', section_id, 'name') || section_id;
 		};
 
-		o = groupsSec.option(form.Value, 'name', _('Group name'));
+		o = groupsSec.option(form.Value, 'name', _('组名'));
 		o.placeholder = 'proxy';
 		o.rmempty = false;
 		o.description = _('Routing targets can only be direct / block / a group. ' +
 			'A group holding a single node is still a group.');
 
-		o = groupsSec.option(form.ListValue, 'policy', _('Policy'));
-		o.value('selector', _('Selector (manual)'));
-		o.value('urltest', _('URLTest (lowest latency)'));
-		o.value('score', _('Score (measured reliability)'));
-		o.value('loadbalance', _('Load balance'));
-		o.value('fallback', _('Fallback (first alive)'));
+		o = groupsSec.option(form.ListValue, 'policy', _('策略'));
+		o.value('selector', _('手动选择'));
+		o.value('urltest', _('延迟最低'));
+		o.value('score', _('实测可靠性优先'));
+		o.value('loadbalance', _('负载均衡'));
+		o.value('fallback', _('故障转移（取第一个可用）'));
 		o.default = 'urltest';
 		o.rmempty = false;
 
-		o = groupsSec.option(form.DynamicList, 'members', _('Members'),
-			_('Nodes and/or other groups. Every member stays warm, so keep groups small.'));
+		o = groupsSec.option(form.DynamicList, 'members', _('成员'),
+			_('节点或其它组。每个成员都会保持热连接，组别开太大。'));
 		(data.nodes || []).forEach(function(n) {
 			o.value(n.name, n.name);
 		});
 		(data.groups || []).forEach(function(g) {
-			o.value(g, _('[group] ') + g);
+			o.value(g, _('[组] ') + g);
 		});
 		o.rmempty = true;
 
-		o = groupsSec.option(form.Value, 'check_url', _('Health check URL'));
+		o = groupsSec.option(form.Value, 'check_url', _('健康检查地址'));
 		o.placeholder = 'https://www.gstatic.com/generate_204';
 		o.rmempty = true;
 
-		o = groupsSec.option(form.Value, 'tolerance', _('Tolerance (ms)'));
+		o = groupsSec.option(form.Value, 'tolerance', _('切换容忍（毫秒）'));
 		o.datatype = 'uinteger';
 		o.placeholder = '50';
 		o.rmempty = true;
 
-		o = groupsSec.option(form.ListValue, 'final', _('Fallback'));
-		o.value('direct', _('Direct'));
-		o.value('block', _('Block'));
+		o = groupsSec.option(form.ListValue, 'final', _('兜底'));
+		o.value('direct', _('直连'));
+		o.value('block', _('阻断'));
 		(data.groups || []).forEach(function(g) {
-			o.value(g, _('[group] ') + g);
+			o.value(g, _('[组] ') + g);
 		});
 		o.default = 'direct';
 		o.rmempty = false;
@@ -224,8 +224,8 @@ return view.extend({
 				E('p', {}, _('One row per SSID subnet. Each row emits a sip(<source>) rule for egress ' +
 					'and, when a DNS upstream is given, a matching sip() rule inside dns.routing.request. ' +
 					'These rules are placed above the China-direct rules, so a subnet always wins.')),
-				E('p', {}, _('Source can be filled from the staged wifiNN interfaces: ') +
-					E('em', {}, (data.ifaces || []).join(', ') || _('(none found)')))
+				E('p', {}, _('可选的 wifiNN 接口：') +
+					E('em', {}, (data.ifaces || []).join(', ') || _('（未发现）')))
 			]);
 		};
 		o.depends('enabled', '1');
@@ -240,27 +240,27 @@ return view.extend({
 			return uci.get('honk', section_id, 'name') || section_id;
 		};
 
-		o = ssr.option(form.Flag, 'enabled', _('Enable'));
+		o = ssr.option(form.Flag, 'enabled', _('启用'));
 		o.default = '1';
 		o.rmempty = false;
 
-		o = ssr.option(form.Value, 'name', _('Name'));
+		o = ssr.option(form.Value, 'name', _('名称'));
 		o.placeholder = 'jy01';
 		o.rmempty = false;
 
-		o = ssr.option(form.Value, 'source', _('Source subnet'),
-			_('CIDR of the SSID subnet, e.g. 188.181.1.0/24.'));
+		o = ssr.option(form.Value, 'source', _('源网段'),
+			_('该 SSID 的网段，例如 188.181.1.0/24。'));
 		o.placeholder = '188.181.1.0/24';
 		o.datatype = 'cidr4';
 		o.rmempty = false;
 
-		o = ssr.option(form.ListValue, 'target', _('Egress group'));
+		o = ssr.option(form.ListValue, 'target', _('出口组'));
 		(data.groups || []).forEach(function(g) {
 			o.value(g, g);
 		});
 		o.rmempty = false;
 
-		o = ssr.option(form.Value, 'interface', _('Interface'),
+		o = ssr.option(form.Value, 'interface', _('接口'),
 			_('Optional wifiNN interface. When set it is appended to lan_interface ' +
 			  'so honk can actually see this subnet.'));
 		(data.ifaces || []).forEach(function(i) {
@@ -268,8 +268,8 @@ return view.extend({
 		});
 		o.rmempty = true;
 
-		o = ssr.option(form.ListValue, 'dns', _('DNS upstream'),
-			_('Optional. Name of an upstream above; queries from this subnet are pinned to it.'));
+		o = ssr.option(form.ListValue, 'dns', _('DNS 上游'),
+			_('可选。填上面某个上游的名字，该网段的查询就走它。'));
 		uci.sections('honk', 'dns_upstream').forEach(function(u) {
 			if (u.name)
 				o.value(u.name, u.name);
@@ -282,30 +282,30 @@ return view.extend({
 		dnsv.depends('enabled', '1');
 		var ds = dnsv.subsection;
 
-		ds.tab('dns_basic', _('Basic'));
-		ds.tab('dns_advanced', _('Advanced'));
+		ds.tab('dns_basic', _('基础设置'));
+		ds.tab('dns_advanced', _('高级设置'));
 
 		/* ---- 基础 ---- */
-		o = ds.taboption('dns_basic', form.Value, 'bind', _('Standalone listener'),
+		o = ds.taboption('dns_basic', form.Value, 'bind', _('独立监听'),
 			_('Optional. honk already answers transparent :53 traffic from the LAN, ' +
 			  'so leave this empty unless something on the router itself needs a DNS server. ' +
 			  'Format: tcp+udp://:5335'));
 		o.placeholder = 'tcp+udp://:5335';
 		o.rmempty = true;
 
-		o = ds.taboption('dns_basic', form.ListValue, 'ipversion_prefer', _('Address family preference'));
-		o.value('', _('No preference'));
-		o.value('4', _('Prefer IPv4'));
-		o.value('6', _('Prefer IPv6'));
+		o = ds.taboption('dns_basic', form.ListValue, 'ipversion_prefer', _('地址族偏好'));
+		o.value('', _('不偏好'));
+		o.value('4', _('优先 IPv4'));
+		o.value('6', _('优先 IPv6'));
 		o.rmempty = true;
 
-		o = ds.taboption('dns_basic', form.Value, 'client_subnet', _('EDNS Client Subnet'),
+		o = ds.taboption('dns_basic', form.Value, 'client_subnet', _('EDNS 客户子网'),
 			_('Only set this when a CDN really needs local results. "auto" probes the public path. ' +
 			  'Leaving it empty is the safe default.'));
 		o.placeholder = 'auto';
 		o.rmempty = true;
 
-		o = ds.taboption('dns_basic', form.Value, 'bootstrap_resolver', _('Bootstrap resolver'),
+		o = ds.taboption('dns_basic', form.Value, 'bootstrap_resolver', _('引导 DNS'),
 			_('Plain host:port used to resolve node server names and upstream DoH/DoT hosts. ' +
 			  'It deliberately bypasses all DNS routing below.'));
 		o.placeholder = '1.1.1.1:53';
@@ -323,72 +323,72 @@ return view.extend({
 			return name || section_id;
 		};
 
-		o = up.option(form.Flag, 'enabled', _('Enable'));
+		o = up.option(form.Flag, 'enabled', _('启用'));
 		o.default = '1';
 		o.rmempty = false;
 
-		o = up.option(form.Value, 'name', _('Name'),
-			_('Used as the tag in routing rules. Lowercase, no spaces.'));
+		o = up.option(form.Value, 'name', _('名称'),
+			_('作为路由规则里的标识，小写且不含空格。'));
 		o.placeholder = 'cn_ali';
 		o.datatype = 'and(uciname)';
 		o.rmempty = false;
 
-		o = up.option(form.Value, 'uri', _('Server'),
+		o = up.option(form.Value, 'uri', _('服务器'),
 			_('Full URI. Supported: udp:// tcp:// tls:// https:// quic:// h3://. ' +
 			  'A bare host:port means UDP.'));
 		o.placeholder = 'https://dns.alidns.com/dns-query';
 		o.rmempty = false;
 
-		o = up.option(form.ListValue, 'role', _('Role'));
-		o.value('cn', _('China'));
-		o.value('remote', _('Remote'));
+		o = up.option(form.ListValue, 'role', _('角色'));
+		o.value('cn', _('大陆'));
+		o.value('remote', _('远端'));
 		o.default = 'remote';
 		o.rmempty = false;
 		o.description = _('China upstream answers geosite:cn queries; ' +
 			'Remote is the fallback for everything else.');
 
-		o = up.option(form.Value, 'outbound', _('Outbound'),
-			_('Optional group name. When set, queries to this upstream are dialled through that group.'));
-		o.placeholder = _('(follow routing rules)');
+		o = up.option(form.Value, 'outbound', _('出站'),
+			_('可选组名。填了则查询该上游时经这个组出站。'));
+		o.placeholder = _('（跟随路由规则）');
 		o.rmempty = true;
 
 		/* ---- 高级 ---- */
-		o = ds.taboption('dns_advanced', form.Value, 'max_cache_size', _('Cache entries'),
-			_('1 to 100000.'));
+		o = ds.taboption('dns_advanced', form.Value, 'max_cache_size', _('缓存条数'),
+			_('取值 1 到 100000。'));
 		o.datatype = 'range(1,100000)';
 		o.default = '10000';
 		o.rmempty = false;
 
-		o = ds.taboption('dns_advanced', form.Flag, 'optimistic_cache', _('Enable cache'),
-			_('Serves cached answers and refreshes them in the background.'));
+		o = ds.taboption('dns_advanced', form.Flag, 'optimistic_cache', _('启用缓存'),
+			_('先返回缓存结果，同时后台刷新。'));
 		o.default = '1';
 		o.rmempty = false;
 
-		o = ds.taboption('dns_advanced', form.Value, 'optimistic_cache_ttl', _('Cache TTL override'),
+		o = ds.taboption('dns_advanced', form.Value, 'optimistic_cache_ttl', _('缓存 TTL 覆盖'),
 			_('Seconds. honk only accepts a bare number here — a "600s" style value is silently ' +
 			  'ignored and falls back to 60. 0 keeps the reply TTL.'));
 		o.datatype = 'uinteger';
 		o.default = '600';
 		o.rmempty = false;
 
-		o = ds.taboption('dns_advanced', form.Value, 'optimistic_stale_reply_ttl', _('Serve-stale TTL'),
-			_('Seconds a stale entry may still be served while refreshing. Same bare-number rule.'));
+		o = ds.taboption('dns_advanced', form.Value, 'optimistic_stale_reply_ttl', _('过期容忍 TTL'),
+			_('刷新期间过期记录还能返回多久（秒）。同样只填数字。'));
 		o.datatype = 'uinteger';
 		o.default = '30';
 		o.rmempty = false;
 
-		o = ds.taboption('dns_advanced', form.Flag, 'cache_file', _('Persist cache'),
-			_('Keeps the DNS cache across restarts.'));
+		o = ds.taboption('dns_advanced', form.Flag, 'cache_file', _('持久化缓存'),
+			_('重启后保留 DNS 缓存。'));
 		o.default = '1';
 		o.rmempty = false;
 
-		o = ds.taboption('dns_advanced', form.Flag, 'block_https_rr', _('Strip HTTPS/SVCB records'),
-			_('Rejects QTYPE 65 so clients fall back to plain A/AAAA. Useful when ECH breaks routing.'));
+		o = ds.taboption('dns_advanced', form.Flag, 'block_https_rr', _('剥离 HTTPS/SVCB 记录'),
+			_('拒绝 QTYPE 65，让客户端回落到普通 A/AAAA。ECH 影响分流时有用。'));
 		o.default = '1';
 		o.rmempty = false;
 
-		o = ds.taboption('dns_advanced', form.Flag, 'ad_block', _('Ad blocking'),
-			_('Rejects qname(geosite: category-ads-all) before it reaches any upstream.'));
+		o = ds.taboption('dns_advanced', form.Flag, 'ad_block', _('广告过滤'),
+			_('在到达任何上游之前拒绝广告域名。'));
 		o.default = '1';
 		o.rmempty = false;
 
@@ -398,30 +398,30 @@ return view.extend({
 		cv.depends('enabled', '1');
 		var cs = cv.subsection;
 
-		o = cs.option(form.ListValue, 'lan_list_mode', _('LAN source policy'));
-		o.value('0', _('Every LAN client goes through the rules below'));
-		o.value('1', _('Only listed clients are proxied'));
+		o = cs.option(form.ListValue, 'lan_list_mode', _('局域网源地址策略'));
+		o.value('0', _('所有局域网客户端都走下面的规则'));
+		o.value('1', _('仅列表内的客户端走代理'));
 		o.default = '0';
 		o.rmempty = false;
 		o.description = _('"Only listed" turns the proxy list into a whitelist: clients outside it ' +
 			'are forced direct, even if the domain rules would proxy them.');
 
-		o = cs.option(form.DynamicList, 'lan_proxy', _('LAN sources -> proxy'),
-			_('CIDR or plain address. Matched with sip().'));
+		o = cs.option(form.DynamicList, 'lan_proxy', _('局域网源地址 → 代理'),
+			_('网段或单个地址，按 sip() 匹配。'));
 		o.placeholder = '188.181.1.0/24';
 		o.rmempty = true;
 
-		o = cs.option(form.DynamicList, 'lan_direct', _('LAN sources -> direct'),
-			_('Matched before any domain rule, so these clients never enter a node.'));
+		o = cs.option(form.DynamicList, 'lan_direct', _('局域网源地址 → 直连'),
+			_('优先于所有域名规则，这些客户端不会进入节点。'));
 		o.placeholder = '192.168.10.0/24';
 		o.rmempty = true;
 
-		o = cs.option(form.DynamicList, 'wan_proxy', _('Destinations -> proxy'),
-			_('CIDR of destination networks that must go through a node. Matched with dip().'));
+		o = cs.option(form.DynamicList, 'wan_proxy', _('目标地址 → 代理'),
+			_('必须走节点的目标网段，按 dip() 匹配。'));
 		o.placeholder = '8.8.8.0/24';
 		o.rmempty = true;
 
-		o = cs.option(form.DynamicList, 'wan_direct', _('Destinations -> direct'));
+		o = cs.option(form.DynamicList, 'wan_direct', _('目标地址 → 直连'));
 		o.placeholder = '203.0.113.0/24';
 		o.rmempty = true;
 
@@ -446,24 +446,24 @@ return view.extend({
 			return uci.get('honk', section_id, 'name') || section_id;
 		};
 
-		o = dr.option(form.Flag, 'enabled', _('Enable'));
+		o = dr.option(form.Flag, 'enabled', _('启用'));
 		o.default = '1';
 		o.rmempty = false;
 
-		o = dr.option(form.Value, 'name', _('Name'));
+		o = dr.option(form.Value, 'name', _('名称'));
 		o.placeholder = 'cn_direct';
 		o.rmempty = false;
 
-		o = dr.option(form.ListValue, 'action', _('Action'));
-		o.value('direct', _('Direct'));
+		o = dr.option(form.ListValue, 'action', _('动作'));
+		o.value('direct', _('直连'));
 		(data.groups || []).forEach(function(g) {
 			o.value(g, g);
 		});
 		o.default = 'direct';
 		o.rmempty = false;
 
-		o = dr.option(form.TextValue, '_domains', _('Domains'),
-			_('One per line.'));
+		o = dr.option(form.TextValue, '_domains', _('域名'),
+			_('一行一个。'));
 		o.rows = 8;
 		o.monospace = true;
 		o.rmempty = true;
@@ -482,17 +482,17 @@ return view.extend({
 				return true;
 			var bad = (value || '').split('\n').map(function(v) { return v.trim(); })
 				.filter(function(v) { return v.length && !/^[A-Za-z0-9*._-]+$/.test(v); });
-			return bad.length === 0 || _('Invalid domain: ') + bad[0];
+			return bad.length === 0 || _('域名无效：') + bad[0];
 		};
 
 		/* ================= 仪表盘 ================= */
 
-		o = s.taboption('status', form.DummyValue, '_status_text', _('Service'));
+		o = s.taboption('status', form.DummyValue, '_status_text', _('服务'));
 		o.rawhtml = true;
 		o.cfgvalue = function() {
 			var enabled = uci.get('honk', 'config', 'enabled') === '1';
 			return E('div', {}, [
-				E('p', {}, enabled ? _('Enabled in configuration.') : _('Disabled in configuration.')),
+				E('p', {}, enabled ? _('配置中已启用。') : _('配置中已禁用。')),
 				E('p', { 'class': 'cbi-value-description' },
 					_('honk writes /etc/honk/config.dae on reload. For live traffic, node latency ' +
 					  'and DNS statistics install doona (native API) or zashboard (Clash API) — ' +
@@ -500,28 +500,28 @@ return view.extend({
 			]);
 		};
 
-		o = s.taboption('status', form.Button, '_reload', _('Regenerate config'));
-		o.inputtitle = _('Regenerate');
+		o = s.taboption('status', form.Button, '_reload', _('重新生成配置'));
+		o.inputtitle = _('重新生成');
 		o.inputstyle = 'apply';
 		o.onclick = function() {
 			return uci.save().then(function() {
 				return uci.apply();
 			}).then(function() {
-				ui.addNotification(null, E('p', {}, _('Configuration applied; honk reloaded.')), 'info');
+				ui.addNotification(null, E('p', {}, _('配置已应用，honk 已重载。')), 'info');
 			});
 		};
 
 		/* 自定义路由规则 */
-		o = s.taboption('custom', form.Flag, 'custom_rules_enabled', _('Enable custom rules'),
+		o = s.taboption('custom', form.Flag, 'custom_rules_enabled', _('启用自定义规则'),
 			E('span', {}, [
-				E('strong', {}, _('This replaces the whole routing block. ')),
+				E('strong', {}, _('这会整段替换路由规则。')),
 				_('While it is on, these are all ignored: per-SSID routing, access control, ' +
 				  'diversion domain lists, the IPv6 mode, the port whitelist and the QUIC setting. ' +
 				  'You must write the fallback line yourself.')
 			]));
 		o.rmempty = false;
 
-		o = s.taboption('custom', form.TextValue, '_custom_rules', _('Routing rules'),
+		o = s.taboption('custom', form.TextValue, '_custom_rules', _('路由规则'),
 			_('Write the body of the routing { } block. dae syntax, one rule per line. ' +
 			  'Stored in /etc/honk/custom.rules, not in UCI.'));
 		o.rows = 20;
