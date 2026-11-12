@@ -7,22 +7,23 @@
 # 一行一个纯域名——生成器只认这个。
 set -u
 
-SRC="$(uci -q get honk.infra.ad_block_source)"
-URL="$(uci -q get honk.infra.ad_block_url)"
 FILE="$(uci -q get honk.infra.ad_block_file)"
 [ -n "$FILE" ] || FILE="/etc/honk/adblock.list"
 
-case "$SRC" in
-  anti-ad) URL="https://anti-ad.net/domains.txt" ;;
-  adrules) URL="https://adrules.top/adblock.txt" ;;
-  custom) : ;;
-  *)
-    echo "no source selected (ad_block_source=$SRC)"
-    exit 1
-    ;;
-esac
+# ad_block_source 是 UCI list，每项一个 URL。geosite.dat 表示用内置分类，
+# 不需要下载，跳过；取第一个真正的 URL。
+URL=""
+for src in $(uci -q get honk.infra.ad_block_source); do
+  case "$src" in
+    ''|geosite.dat|geosite) continue ;;
+    http://*|https://*|file://*) URL="$src"; break ;;
+    *)
+      echo "skip unsupported source: $src" >&2
+      ;;
+  esac
+done
 
-[ -n "$URL" ] || { echo "custom source selected but ad_block_url is empty"; exit 1; }
+[ -n "$URL" ] || { echo "no downloadable source configured (only geosite or empty)"; exit 1; }
 
 TMP="/tmp/honk-adblock.$$"
 trap 'rm -f "$TMP"' EXIT

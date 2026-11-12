@@ -425,83 +425,40 @@ return view.extend({
 		o.default = '1';
 		o.rmempty = false;
 
-		/* 规则来源 + 立即更新放同一行：LuCI 标准字段一行只放一个控件，
-		   要并排只能自己渲染。地址框也跟着下拉实时显隐，不依赖 depends。 */
-		var adUrlRow = null;
+		/* 规则来源：跟 mosdns 一样用 DynamicList——每项一个可编辑输入框，
+		   底部下拉追加预设。值就是 URL 本身，也可以直接回车输入。 */
+		o = ds.taboption('dns_advanced', form.DynamicList, 'ad_block_source', _('广告过滤规则来源'),
+			_('从下拉选预设，或直接输入列表 URL 回车。留空表示只用上面的 geosite 分类。' +
+			  '支持本地文件，如 file:///etc/honk/adblock.list'));
+		o.value('geosite.dat', 'v2ray-geosite（内置分类）');
+		o.value('https://anti-ad.net/domains.txt', 'anti-AD');
+		o.value('https://adrules.top/adblock.txt', 'AdRules');
+		o.value('https://raw.githubusercontent.com/privacy-protection-tools/anti-AD/master/anti-ad-domains.txt', 'anti-AD（GitHub）');
+		o.value('https://raw.githubusercontent.com/Cats-Team/AdRules/main/mosdns_adrules.txt', 'Cats-Team/AdRules');
+		o.value('https://raw.githubusercontent.com/neodevpro/neodevhost/master/domain', 'NEO DEV HOST');
+		o.depends('ad_block', '1');
+		o.rmempty = true;
 
-		o = ds.taboption('dns_advanced', form.DummyValue, '_ad_source_row', _('规则来源'));
-		o.rawhtml = true;
-		o.cfgvalue = function() {
-			var SOURCES = [
-				['none', _('不下载（只用上面的 geosite 分类）')],
-				['anti-ad', _('anti-AD')],
-				['adrules', _('AdRules')],
-				['custom', _('自定义')]
-			];
-			var cur = uci.get('honk', 'infra', 'ad_block_source') || 'none';
-
-			var sel = E('select', {
-				'class': 'cbi-input-select',
-				'style': 'flex:1 1 auto;min-width:14em;',
-				'change': function(ev) {
-					uci.set('honk', 'infra', 'ad_block_source', ev.target.value);
-					if (adUrlRow)
-						adUrlRow.style.display = (ev.target.value === 'custom') ? '' : 'none';
-				}
-			}, SOURCES.map(function(x) {
-				return E('option', {
-					'value': x[0],
-					'selected': (x[0] === cur) ? 'selected' : null
-				}, x[1]);
-			}));
-
-			var btn = E('button', {
-				'class': 'btn cbi-button cbi-button-apply',
-				'style': 'flex:0 0 auto;',
-				'click': function(ev) {
-					ev.preventDefault();
-					uci.set('honk', 'infra', 'ad_block_source', sel.value);
-					var out = E('pre', {
-						'class': 'cbi-input-textarea',
-						'style': 'height:12em;overflow:auto;white-space:pre-wrap;font-family:monospace;font-size:12px;'
-					}, _('正在更新…'));
-					ui.showModal(_('更新广告规则'), [out, E('div', { 'class': 'right' },
-						E('button', { 'class': 'btn', 'click': ui.hideModal }, _('关闭')))]);
-					return uci.save().then(function() {
-						return fs.exec('/usr/share/honk/update-adblock.sh');
-					}).then(function(res) {
-						out.textContent = (res.stdout || '') + (res.stderr || '');
-						return fs.read('/etc/honk/adblock.list').catch(function() { return ''; });
-					}).then(function(txt) {
-						var n = (txt || '').split('\n').filter(function(x) { return x.trim(); }).length;
-						out.textContent += '\n\n当前列表：' + n + ' 条';
-					}).catch(function(e) { out.textContent = String(e); });
-				}
-			}, _('立即更新'));
-
-			return E('div', {
-				'style': 'display:flex;gap:8px;align-items:center;'
-			}, [ sel, btn ]);
-		};
-
-		o = ds.taboption('dns_advanced', form.DummyValue, '_ad_url_row', _('自定义地址'));
-		o.rawhtml = true;
-		o.cfgvalue = function() {
-			var inp = E('input', {
-				'class': 'cbi-input-text',
-				'style': 'width:100%;',
-				'placeholder': 'https://example.com/domains.txt',
-				'value': uci.get('honk', 'infra', 'ad_block_url') || '',
-				'change': function(ev) {
-					uci.set('honk', 'infra', 'ad_block_url', ev.target.value);
-				}
-			});
-			var wrap = E('div', {}, [ inp ]);
-			var cur = uci.get('honk', 'infra', 'ad_block_source') || 'none';
-			if (cur !== 'custom')
-				wrap.style.display = 'none';
-			adUrlRow = wrap;
-			return wrap;
+		o = ds.taboption('dns_advanced', form.Button, '_fetch_adblock', _('更新规则'));
+		o.inputtitle = _('立即更新');
+		o.inputstyle = 'apply';
+		o.depends('ad_block', '1');
+		o.onclick = function() {
+			var out = E('pre', {
+				'class': 'cbi-input-textarea',
+				'style': 'height:12em;overflow:auto;white-space:pre-wrap;font-family:monospace;font-size:12px;'
+			}, _('正在更新…'));
+			ui.showModal(_('更新广告规则'), [out, E('div', { 'class': 'right' },
+				E('button', { 'class': 'btn', 'click': ui.hideModal }, _('关闭')))]);
+			return uci.save().then(function() {
+				return fs.exec('/usr/share/honk/update-adblock.sh');
+			}).then(function(res) {
+				out.textContent = (res.stdout || '') + (res.stderr || '');
+				return fs.read('/etc/honk/adblock.list').catch(function() { return ''; });
+			}).then(function(txt) {
+				var n = (txt || '').split('\n').filter(function(x) { return x.trim(); }).length;
+				out.textContent += '\n\n当前列表：' + n + ' 条';
+			}).catch(function(e) { out.textContent = String(e); });
 		};
 
 		/* 自定义广告域名：写文件，生成器按 40 个一组拆成 domain(suffix:) 规则 */
