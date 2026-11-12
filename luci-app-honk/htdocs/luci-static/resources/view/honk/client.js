@@ -622,9 +622,9 @@ return view.extend({
 		o.rawhtml = true;
 		o.cfgvalue = function() {
 			var statusEl = E('div', { 'class': 'cbi-value-description' }, _('正在读取 honk 状态…'));
-			var CTRL_STYLE = 'width:100%;height:34px;box-sizing:border-box;margin:0;';
-			var groupSel = E('select', { 'class': 'cbi-input-select', 'style': CTRL_STYLE });
-			var memberSel = E('select', { 'class': 'cbi-input-select', 'style': CTRL_STYLE });
+			var CTRL_STYLE = 'height:34px;box-sizing:border-box;margin:0;padding:0 8px;';
+			var groupSel = E('select', { 'class': 'cbi-input-select', 'style': CTRL_STYLE + 'width:16em;' });
+			var memberSel = E('select', { 'class': 'cbi-input-select', 'style': CTRL_STYLE + 'width:16em;' });
 			var applyBtn = E('button', {
 				'class': 'btn cbi-button cbi-button-apply',
 				'style': 'height:34px;box-sizing:border-box'
@@ -738,12 +738,9 @@ return view.extend({
 			return E('div', {}, [
 				statusEl,
 				E('div', {
-					'style': 'display:flex;gap:8px;align-items:center;margin:8px 0;flex-wrap:wrap;'
-				}, [
-					E('div', { 'style': 'flex:1 1 12em;min-width:8em' }, [ groupSel ]),
-					E('div', { 'style': 'flex:1 1 12em;min-width:8em' }, [ memberSel ]),
-					E('div', { 'style': 'flex:0 0 auto' }, [ applyBtn ])
-				]),
+					'style': 'display:flex;gap:8px;align-items:center;margin:8px 0;' +
+					         'flex-wrap:wrap;justify-content:flex-start;'
+				}, [ groupSel, memberSel, applyBtn ]),
 				table,
 				E('div', { 'class': 'cbi-value-description', 'style': 'margin-top:8px' },
 					_('这里改的是 selector 组的手动选择；urltest 和 score 组会自己做决定，' +
