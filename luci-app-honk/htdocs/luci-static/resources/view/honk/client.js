@@ -38,8 +38,8 @@ return view.extend({
 
 	render: function(data) {
 		var m = new form.Map('honk', _('Honk'),
-			_('eBPF transparent proxy engine. This page writes UCI only; ' +
-			  'the dae config is generated into /etc/honk/config.dae on reload.'));
+			_('honk 的 eBPF 透明代理引擎。本页只写 UCI，' +
+			  '真正的配置在重载时生成到 /etc/honk/config.dae。'));
 
 		/* 公共段：开关、主节点、路由模式 */
 		var s = m.section(form.NamedSection, 'config', 'honk');
@@ -83,9 +83,9 @@ return view.extend({
 		o.rmempty = false;
 		o.description = E('span', {}, [
 			E('span', {
-				title: _('Blocking drops UDP 443, so browsers and apps fall back to TCP/TLS. ' +
-				         'QUIC going direct means that traffic leaves from your local ISP ' +
-				         'instead of the node, which is a second uncontrolled egress.')
+				title: _('阻断会丢弃 UDP 443，浏览器和应用因此回落到 TCP/TLS。' +
+				         '若把 QUIC 设为直连，这部分流量就从本地宽带出去，' +
+				         '等于多了一条不受控的出口。')
 			}, '\u24d8 '),
 			_('建议阻断。只有某个应用离开 QUIC 就卡死时才改成直连。')
 		]);
@@ -99,15 +99,15 @@ return view.extend({
 		o.rmempty = false;
 		o.description = E('span', {}, [
 			E('span', {
-				title: _('honk has no IPv6 toggle: eBPF captures v4 and v6 alike, and the chosen ' +
-					'rule decides where v6 goes.') + '\n\n' +
+				title: _('honk 没有 IPv6 开关：eBPF 把 v4 和 v6 一起抓走，' +
+					'v6 走哪条路由完全由下面选中的规则决定。') + '\n\n' +
 					_('代理 —— 不生成规则，v6 跟随 fallback 进入节点。') + '\n' +
 					_('直连 —— ipversion(6) -> direct 置于最前，v6 从本地宽带出去。') + '\n' +
-					_('Block (China exempt) — ipversion(6) -> block after geosite-cn/geoip-cn, ' +
-					  'so Chinese v6 stays direct and the rest is dropped.') + '\n' +
+					_('阻断（大陆除外）—— ipversion(6) -> block 排在 geosite-cn/geoip-cn 之后，' +
+					  '国内 v6 仍直连，其余丢弃。') + '\n' +
 					_('全局阻断 —— ipversion(6) -> block 置于最前，任何 v6 都不出网。') + '\n\n' +
-					_('Blocking only stops TCP/UDP from leaving over v6: WAN prefix delegation, ' +
-					  'RA/SLAAC and LAN-internal v6 keep working.')
+					_('阻断只拦 TCP/UDP 出网：WAN 前缀委派、' +
+					  'RA/SLAAC 和局域网内部 v6 通信照常。')
 			}, '\u24d8 '),
 			_('四种 IPv6 处理方式，悬停图标可看各项实际生成的规则。')
 		])
@@ -123,7 +123,7 @@ return view.extend({
 		o.rmempty = true;
 
 		o = ss.option(form.Value, 'wan_interface', _('WAN 接口'),
-			_('Interface carrying the router\u2019s own traffic. "auto" follows the IPv4 default route.'));
+			_('承载路由器本机流量的接口。auto 表示跟随 IPv4 默认路由。'));
 		o.placeholder = 'auto';
 		o.rmempty = true;
 
@@ -160,8 +160,8 @@ return view.extend({
 		o = nodesSec.option(form.Value, 'uri', _('分享链接'));
 		o.placeholder = 'vless://uuid@host:443?security=tls&sni=host#name';
 		o.rmempty = false;
-		o.description = _('One link per node. honk understands vless / vmess / trojan / hysteria2 / tuic / ' +
-			'shadowsocks / anytls / juicity / socks5.');
+		o.description = _('每个节点一条链接。支持 vless / vmess / trojan / hysteria2 / tuic / ' +
+			'shadowsocks / anytls / juicity / socks5。');
 
 		var gv = s.taboption('nodes', form.SectionValue, '_groups', form.GridSection, 'group', null);
 		var groupsSec = gv.subsection;
@@ -175,8 +175,8 @@ return view.extend({
 		o = groupsSec.option(form.Value, 'name', _('组名'));
 		o.placeholder = 'proxy';
 		o.rmempty = false;
-		o.description = _('Routing targets can only be direct / block / a group. ' +
-			'A group holding a single node is still a group.');
+		o.description = _('路由目标只能是 direct / block / 组。' +
+			'哪怕组里只有一个节点，也必须先成组。');
 
 		o = groupsSec.option(form.ListValue, 'policy', _('策略'));
 		o.value('selector', _('手动选择'));
@@ -221,9 +221,9 @@ return view.extend({
 		o.rawhtml = true;
 		o.cfgvalue = function() {
 			return E('div', { 'class': 'cbi-value-description' }, [
-				E('p', {}, _('One row per SSID subnet. Each row emits a sip(<source>) rule for egress ' +
-					'and, when a DNS upstream is given, a matching sip() rule inside dns.routing.request. ' +
-					'These rules are placed above the China-direct rules, so a subnet always wins.')),
+				E('p', {}, _('一行一个 SSID 网段。每行生成一条 sip(<源网段>) 出口规则；' +
+					'填了 DNS 上游时，还会在 dns.routing.request 里生成对应的 sip() 规则。' +
+					'这些规则排在大陆直连规则之前，所以网段总是优先。')),
 				E('p', {}, _('可选的 wifiNN 接口：') +
 					E('em', {}, (data.ifaces || []).join(', ') || _('（未发现）')))
 			]);
@@ -261,8 +261,8 @@ return view.extend({
 		o.rmempty = false;
 
 		o = ssr.option(form.Value, 'interface', _('接口'),
-			_('Optional wifiNN interface. When set it is appended to lan_interface ' +
-			  'so honk can actually see this subnet.'));
+			_('可选的 wifiNN 接口。填了会追加到 lan_interface，' +
+			  '否则 honk 看不到这个网段的流量。'));
 		(data.ifaces || []).forEach(function(i) {
 			o.value(i, i);
 		});
@@ -287,9 +287,9 @@ return view.extend({
 
 		/* ---- 基础 ---- */
 		o = ds.taboption('dns_basic', form.Value, 'bind', _('独立监听'),
-			_('Optional. honk already answers transparent :53 traffic from the LAN, ' +
-			  'so leave this empty unless something on the router itself needs a DNS server. ' +
-			  'Format: tcp+udp://:5335'));
+			_('可选。局域网来的 :53 请求 honk 已经透明接管，' +
+			  '除非路由器本机有程序需要一个 DNS 服务，否则留空。' +
+			  '格式：tcp+udp://:5335'));
 		o.placeholder = 'tcp+udp://:5335';
 		o.rmempty = true;
 
@@ -300,14 +300,14 @@ return view.extend({
 		o.rmempty = true;
 
 		o = ds.taboption('dns_basic', form.Value, 'client_subnet', _('EDNS 客户子网'),
-			_('Only set this when a CDN really needs local results. "auto" probes the public path. ' +
-			  'Leaving it empty is the safe default.'));
+			_('只有在 CDN 确实需要就近结果时才设。auto 会探测公网出口。' +
+			  '留空是最安全的默认值。'));
 		o.placeholder = 'auto';
 		o.rmempty = true;
 
 		o = ds.taboption('dns_basic', form.Value, 'bootstrap_resolver', _('引导 DNS'),
-			_('Plain host:port used to resolve node server names and upstream DoH/DoT hosts. ' +
-			  'It deliberately bypasses all DNS routing below.'));
+			_('明文 host:port，用来解析节点服务器名和上游 DoH/DoT 域名。' +
+			  '它故意绕开下面所有 DNS 路由。'));
 		o.placeholder = '1.1.1.1:53';
 		o.datatype = 'hostport';
 		o.rmempty = true;
@@ -334,8 +334,8 @@ return view.extend({
 		o.rmempty = false;
 
 		o = up.option(form.Value, 'uri', _('服务器'),
-			_('Full URI. Supported: udp:// tcp:// tls:// https:// quic:// h3://. ' +
-			  'A bare host:port means UDP.'));
+			_('完整 URI。支持 udp:// tcp:// tls:// https:// quic:// h3://。' +
+			  '只写 host:port 时按 UDP 处理。'));
 		o.placeholder = 'https://dns.alidns.com/dns-query';
 		o.rmempty = false;
 
@@ -344,8 +344,8 @@ return view.extend({
 		o.value('remote', _('远端'));
 		o.default = 'remote';
 		o.rmempty = false;
-		o.description = _('China upstream answers geosite:cn queries; ' +
-			'Remote is the fallback for everything else.');
+		o.description = _('大陆上游负责 geosite:cn 的查询，' +
+			'远端上游兜底其余全部。');
 
 		o = up.option(form.Value, 'outbound', _('出站'),
 			_('可选组名。填了则查询该上游时经这个组出站。'));
@@ -365,8 +365,8 @@ return view.extend({
 		o.rmempty = false;
 
 		o = ds.taboption('dns_advanced', form.Value, 'optimistic_cache_ttl', _('缓存 TTL 覆盖'),
-			_('Seconds. honk only accepts a bare number here — a "600s" style value is silently ' +
-			  'ignored and falls back to 60. 0 keeps the reply TTL.'));
+			_('单位秒。honk 这里只吃裸数字——写成 600s 会被静默忽略并回退到 60。' +
+			  '填 0 表示沿用应答本身的 TTL。'));
 		o.datatype = 'uinteger';
 		o.default = '600';
 		o.rmempty = false;
@@ -431,8 +431,8 @@ return view.extend({
 		o.rawhtml = true;
 		o.cfgvalue = function() {
 			return E('div', { 'class': 'cbi-value-description' },
-				_('Domain lists emit domain(suffix: …) rules. Entries are matched as suffixes, ' +
-				  'so "qq.com" also covers "www.qq.com". One domain per line.'));
+				_('域名列表会生成 domain(suffix: …) 规则，按后缀匹配，' +
+				  '所以 qq.com 也覆盖 www.qq.com。一行一个域名。'));
 		};
 		o.depends('enabled', '1');
 
@@ -494,9 +494,9 @@ return view.extend({
 			return E('div', {}, [
 				E('p', {}, enabled ? _('配置中已启用。') : _('配置中已禁用。')),
 				E('p', { 'class': 'cbi-value-description' },
-					_('honk writes /etc/honk/config.dae on reload. For live traffic, node latency ' +
-					  'and DNS statistics install doona (native API) or zashboard (Clash API) — ' +
-					  'both are one-click installers from the honk project.'))
+					_('honk 在重载时写出 /etc/honk/config.dae。要看实时流量、节点延迟' +
+					  '和 DNS 统计，装 doona（原生 API）或 zashboard（Clash API）——' +
+					  '两者都是 honk 项目提供的一键安装。'))
 			]);
 		};
 
@@ -515,15 +515,15 @@ return view.extend({
 		o = s.taboption('custom', form.Flag, 'custom_rules_enabled', _('启用自定义规则'),
 			E('span', {}, [
 				E('strong', {}, _('这会整段替换路由规则。')),
-				_('While it is on, these are all ignored: per-SSID routing, access control, ' +
-				  'diversion domain lists, the IPv6 mode, the port whitelist and the QUIC setting. ' +
-				  'You must write the fallback line yourself.')
+				_('开启后，多SSID分流、访问控制、分流控制、IPv6 模式、' +
+				  '端口白名单和 QUIC 设置全部失效。' +
+				  '兜底那条 fallback 也要你自己写。')
 			]));
 		o.rmempty = false;
 
 		o = s.taboption('custom', form.TextValue, '_custom_rules', _('路由规则'),
-			_('Write the body of the routing { } block. dae syntax, one rule per line. ' +
-			  'Stored in /etc/honk/custom.rules, not in UCI.'));
+			_('写 routing { } 的内部内容，dae 语法，一行一条规则。' +
+			  '存在 /etc/honk/custom.rules 里，不走 UCI。'));
 		o.rows = 20;
 		o.monospace = true;
 		o.depends('custom_rules_enabled', '1');
