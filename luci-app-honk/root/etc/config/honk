@@ -1,0 +1,76 @@
+# luci-app-honk 的唯一配置源。LuCI 只写这里，/etc/honk/config.dae 由 gen_dae.sh 生成。
+
+config honk 'config'
+	option enabled '0'
+	option main_group 'nil'
+	option routing_mode 'bypass_mainland_china'
+	option routing_port 'common'
+	option ipv6_mode 'block'
+	option quic_mode 'block'
+	option custom_rules_enabled '0'
+	# 自定义规则存在独立文件里（一行一条），UCI option 装不下多行
+	option custom_rules_file '/etc/honk/custom.rules'
+
+config honk 'infra'
+	option data_dir '/var/lib/honk'
+	option log_level 'info'
+	option bootstrap_resolver '1.1.1.1:53'
+	option geo_asset_dir '/usr/share/honk/geo'
+# 首次安装留空给用户自己选；br-lan 不存在时这里不填
+	option lan_interface 'br-lan'
+	option wan_interface 'auto'
+	option bind ''
+	option ipversion_prefer ''
+	option client_subnet ''
+	option max_cache_size '10000'
+	option optimistic_cache '1'
+	option optimistic_cache_ttl '600'
+	option optimistic_stale_reply_ttl '30'
+	option cache_file '1'
+	option block_https_rr '1'
+	option ad_block '1'
+
+# 上游 DNS。role: cn / remote
+config dns_upstream 'cn_ali'
+	option enabled '1'
+	option name 'cn_ali'
+	option uri 'https://dns.alidns.com/dns-query'
+	option role 'cn'
+	option outbound ''
+
+config dns_upstream 'remote_cf'
+	option enabled '1'
+	option name 'remote_cf'
+	option uri 'https://dns.cloudflare.com/dns-query'
+	option role 'remote'
+	option outbound ''
+
+# 节点：honk 的每个 node 就是一条分享链接
+config node 'sample'
+	option enabled '0'
+	option name 'sample'
+	option uri ''
+
+# 组：策略 + 成员。honk 的路由目标只能是 direct / block / 组。
+# 这个 proxy 是示例组，成员留空，装好后自己加节点再填。
+config group 'proxy'
+	option name 'proxy'
+	option policy 'urltest'
+	option check_url 'https://www.gstatic.com/generate_204'
+	option tolerance '50'
+	option final 'direct'
+
+# 访问控制：按源/目标地址决定走代理还是直连
+config control 'control'
+	option lan_list_mode '0'
+	list lan_proxy ''
+	list lan_direct ''
+	list wan_proxy ''
+	list wan_direct ''
+
+# 域名分流：action = direct / proxy
+config domain_route 'sample'
+	option enabled '0'
+	option name 'cn_direct'
+	option action 'direct'
+	list domains 'qq.com'

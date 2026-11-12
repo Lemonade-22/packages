@@ -1,0 +1,23 @@
+{
+	"luci-app-honk": {
+		"description": "Grant access to honk configuration",
+		"read": {
+			"file": {
+				"/etc/honk/config.dae": [ "read" ],
+				"/etc/honk/custom.rules": [ "read" ],
+				"/var/lib/honk/honk.log": [ "read" ]
+			},
+			"ubus": {
+				"service": [ "list" ]
+			},
+			"uci": [ "honk", "network" ]
+		},
+		"write": {
+			"file": {
+				"/etc/honk/config.dae": [ "write" ],
+				"/etc/honk/custom.rules": [ "write" ]
+			},
+			"uci": [ "honk" ]
+		}
+	}
+}
