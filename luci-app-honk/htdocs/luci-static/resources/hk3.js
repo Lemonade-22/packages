@@ -231,7 +231,7 @@ function renderProviders() {
 
 			var table = E('table', { class: 'table' },
 				E('tr', { class: 'tr table-titles' },
-					[_('名称'), _('类型'), _('节点数'), _('状态'), _('最近错误'), ''].map(function(t) {
+					[_('名称'), _('类型'), _('节点数'), _('状态'), _('最近错误')].map(function(t) {
 						return E('th', { class: 'th' }, t);
 					})));
 
@@ -251,32 +251,16 @@ function renderProviders() {
 				else if (p.status === 'failed' || p.status === 'error')
 					state.style.color = 'red';
 
-				var btn = E('button', { class: 'btn cbi-button-action' }, _('刷新'));
-				btn.addEventListener('click', function(ev) {
-					ev.preventDefault();
-					if (btn.disabled) return;
-					btn.disabled = true;
-					btn.textContent = _('刷新中…');
-
-					api('provider-refresh', p.id)
-						.then(waitOperation)
-						.then(function() { return check(); })
-						.catch(function(e) {
-							ui.addNotification(null, E('p', {}, _('刷新失败：') + e.message), 'error');
-						})
-						.finally(function() {
-							btn.disabled = false;
-							btn.textContent = _('刷新');
-						});
-				});
-
+				// 这里原来有个「刷新」按钮，删掉了：
+				// 它和上方表格的行内「更新」、底部的「更新所有订阅」抢同一把锁，
+				// 内核会回 "A refresh for this provider is already in flight"，
+				// 而且这张表每 20 秒自己轮询，也不需要手动刷。
 				table.appendChild(E('tr', { class: 'tr' }, [
 					E('td', { class: 'td' }, p.name || p.id),
 					E('td', { class: 'td' }, p.kind || '-'),
 					E('td', { class: 'td' }, String(p.node_count != null ? p.node_count : '-')),
 					E('td', { class: 'td' }, state),
-					E('td', { class: 'td', style: 'word-break:break-all;color:#c00' }, (p.last_error && (p.last_error.message || p.last_error.code)) || ''),
-					E('td', { class: 'td' }, btn)
+					E('td', { class: 'td', style: 'word-break:break-all;color:#c00' }, (p.last_error && (p.last_error.message || p.last_error.code)) || '')
 				]));
 			});
 
