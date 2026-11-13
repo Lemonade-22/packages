@@ -5,7 +5,7 @@
 'require ui';
 'require fs';
 'require poll';
-'require hkui';
+'require hk2';
 
 /*
  * luci-app-honk_new · 客户端设置
@@ -633,7 +633,7 @@ return view.extend({
 			'fallback: proxy'
 		].join('\n');
 		return m.render().then(function(el) {
-			hkui.mountStatusBanner(el);
+			hk2.mountStatusBanner(el);
 			return el;
 		});
 	}
