@@ -225,14 +225,43 @@ return view.extend({
 		// 成员要包含「当前生效的节点」，也就是内核实际解析出来的那些。
 		// 只列手动节点是不够的：订阅节点的名字由内核在运行时决定，UCI 里没有，
 		// 用户全是订阅节点时这个下拉会是空的，根本没法配组。
+		// 成员要包含「当前生效的节点」，也就是内核实际解析出来的那些。
+		// 只列手动节点是不够的：订阅节点的名字由内核在运行时决定，UCI 里没有，
+		// 用户全是订阅节点时这个下拉会是空的，根本没法配组。
+		//
+		// 排序按「订阅 → 节点名升序」。DynamicList 不是原生 select，不支持
+		// optgroup，所以组名写在选项文字前面，看的时候能一眼分开。
 		o = groupsSec.option(form.DynamicList, 'members', _('成员'));
+
+		var byTag = {};
 		(data.runtime || []).forEach(function(rt) {
 			if (rt.protocol === 'direct' || rt.protocol === 'block') return;
-			if (rt.name) o.value(rt.name, rt.name);
+			if (!rt.name) return;
+			var tg = rt.subscription_tag || '';
+			(byTag[tg] = byTag[tg] || []).push(rt.name);
 		});
-		(data.manual || []).forEach(function(mn) {
-			if (mn.name) o.value(mn.name, mn.name);
+
+		// 手动节点排最前，然后按订阅出现的顺序，每组内部按名称升序
+		var order = [''];
+		(data.providers || []).forEach(function(p) {
+			if (p.kind === 'inline') return;
+			var tg = p.name || p.id;
+			if (order.indexOf(tg) < 0) order.push(tg);
 		});
+		// 兜底：运行时里有、但 providers 没列出来的 tag
+		Object.keys(byTag).forEach(function(tg) {
+			if (order.indexOf(tg) < 0) order.push(tg);
+		});
+
+		order.forEach(function(tg) {
+			var names = (byTag[tg] || []).slice().sort(function(a, b) {
+				return String(a).localeCompare(String(b), 'zh-Hans-CN');
+			});
+			names.forEach(function(nm) {
+				o.value(nm, tg ? (tg + ' / ' + nm) : (_('手动') + ' / ' + nm));
+			});
+		});
+
 		(data.groups || []).forEach(function(g) { o.value(g, _('[组] ') + g); });
 		o.rmempty = true;
 		o.description = _('选节点或别的组。留空表示这个组暂时不含任何成员（不会自动包含全部节点）。');
@@ -473,6 +502,52 @@ function mountTestAll(el) {
 }
 
 /*
+ * 点表头排序。没测过的节点永远排在最后——不管是升序还是降序，
+ * 把「未测」当成最小延迟混在第一名里毫无意义。
+ */
+function bindSort(table) {
+	var LAT = function(v) { return v === 'Infinity' ? Infinity : parseFloat(v); };
+
+	Array.prototype.forEach.call(table.querySelectorAll('th[data-sortkey]'), function(th) {
+		var key = th.getAttribute('data-sortkey');
+		var arrow = th.querySelector('.honk-sort-arrow');
+
+		th.addEventListener('click', function(ev) {
+			ev.preventDefault();
+			var dir = arrow.getAttribute('data-dir') === 'asc' ? 'desc' : 'asc';
+
+			Array.prototype.forEach.call(table.querySelectorAll('.honk-sort-arrow'), function(a) {
+				a.setAttribute('data-dir', '');
+				a.textContent = '⇅';
+			});
+			arrow.setAttribute('data-dir', dir);
+			arrow.textContent = dir === 'asc' ? '▲' : '▼';
+
+			var rows = Array.prototype.slice.call(table.querySelectorAll('tr')).filter(function(tr) {
+				return tr.hasAttribute('data-' + key);
+			});
+
+			rows.sort(function(a, b) {
+				if (key === 'latency') {
+					var la = LAT(a.getAttribute('data-latency'));
+					var lb = LAT(b.getAttribute('data-latency'));
+					if (la === lb) return 0;
+					if (la === Infinity) return 1;      // 未测的沉底
+					if (lb === Infinity) return -1;
+					return (la - lb) * (dir === 'asc' ? 1 : -1);
+				}
+				var c = String(a.getAttribute('data-' + key))
+					.localeCompare(String(b.getAttribute('data-' + key)), 'zh-Hans-CN');
+				return c * (dir === 'asc' ? 1 : -1);
+			});
+
+			// 已经排好序，按顺序重新 append 即可——append 会移动节点，不会复制
+			rows.forEach(function(tr) { tr.parentNode.appendChild(tr); });
+		});
+	});
+}
+
+/*
  * 订阅 tab 的标题：优先订阅名，其次 URL 主机名，最后截断链接本身。
  * 机场经常不起名，那就用主机名区分——dasho.pqjc.site 比"订阅 2"有用得多。
  */
@@ -498,15 +573,27 @@ function renderProviderNodes(data, tag) {
 	// 但保留「类型」方便一眼看出协议，其余两列去掉。
 	var table = E('table', { 'class': 'table', 'style': 'width:100%' },
 		E('tr', { 'class': 'tr table-titles' },
-			[_('名称'), _('延迟'), _('测试'), _('类型')].map(function(t) {
+			[{ t: _('名称'), k: 'name' }, { t: _('延迟'), k: 'latency' },
+			 { t: _('测试'), k: null }, { t: _('类型'), k: 'type' }].map(function(col) {
 				// 滚动容器的表头必须吸顶，否则往下滚时它会跟着内容走，
 				// 看起来就像标题栏错位到数据行中间。
 				// border-collapse 下 sticky 的 th 会丢掉自己的边框，滚动时那一行
 				// 就变成一条空白。用 inset box-shadow 把上下边框画回来。
-				return E('th', { 'class': 'th', 'style':
-					'position:sticky;top:0;z-index:2;' +
+				var st = 'position:sticky;top:0;z-index:2;' +
 					'background:var(--background-color-high,#fff);' +
-					'box-shadow:inset 0 -1px 0 rgba(0,0,0,.14),inset 0 1px 0 rgba(0,0,0,.14);' }, t);
+					'box-shadow:inset 0 -1px 0 rgba(0,0,0,.14),inset 0 1px 0 rgba(0,0,0,.14);';
+				if (col.k) st += 'cursor:pointer;user-select:none;white-space:nowrap';
+
+				var th = E('th', { 'class': 'th', 'style': st }, col.t);
+				if (col.k) {
+					th.setAttribute('data-sortkey', col.k);
+					th.appendChild(E('span', {
+						'class': 'honk-sort-arrow',
+						'data-dir': '',
+						'style': 'margin-left:6px;color:#999;font-size:11px'
+					}, '⇅'));
+				}
+				return th;
 			})));
 
 	if (!rows.length) {
@@ -553,13 +640,20 @@ function renderProviderNodes(data, tag) {
 				.finally(function() { btn.disabled = false; });
 		});
 
-		table.appendChild(E('tr', { 'class': 'tr' }, [
+		var tr = E('tr', { 'class': 'tr' }, [
 			E('td', { 'class': 'td' }, n.name || n.id),
 			cell,
 			E('td', { 'class': 'td' }, btn),
 			E('td', { 'class': 'td' }, n.protocol || '-')
-		]));
+		]);
+		// 排序用的原始值。延迟用数字，没测过的记成 Infinity 好让它排最后。
+		tr.setAttribute('data-name', n.name || n.id);
+		tr.setAttribute('data-type', n.protocol || '');
+		tr.setAttribute('data-latency',
+			(h && typeof h.latency_ms === 'number') ? String(Math.round(h.latency_ms)) : 'Infinity');
+		table.appendChild(tr);
 	});
 
+	bindSort(table);
 	return fullRow(E('div', { 'style': 'width:100%;max-height:32em;overflow:auto;position:relative' }, table));
 }
