@@ -86,7 +86,9 @@ for s in $sections; do
 	while IFS= read -r link; do
 		[ -n "$link" ] || continue
 		idx=$((idx + 1))
-		sid="sub_${s}_${idx}"
+		# $s 是 @subscription[0] 这种 UCI 引用，直接拼进 section 名会被拒（Invalid argument）
+		safe_s="$(printf %s "$s" | tr -cd "a-zA-Z0-9")"
+		sid="sub_${safe_s}_${idx}"
 		uci -q delete "$CONF.$sid"
 		uci set "$CONF.$sid=node"
 		uci -q set "$CONF.$sid.enabled=1"
