@@ -10,6 +10,12 @@ STOP=15
 
 HONK_CONF="/etc/honk/config.dae"
 GEN_SCRIPT="/usr/share/honk/gen_dae.sh"
+API_SCRIPT="/usr/share/honk/honk-api.sh"
+RUN_DIR="/var/run/honk"
+apply_state() {
+	mkdir -p "$RUN_DIR"
+	printf '{"status":"%s"}\n' "$1" > "$RUN_DIR/apply.json"
+}
 
 honk_bin() {
 	for b in /usr/sbin/honk-core /usr/bin/honk-core /sbin/honk-core /bin/honk-core; do
@@ -67,14 +73,25 @@ check_geo() {
 }
 
 generate() {
-	if ! sh "$GEN_SCRIPT" "$HONK_CONF"; then
-		echo "honk: failed to generate $HONK_CONF"
+	mkdir -p "$RUN_DIR"
+	local candidate="$HONK_CONF.new" result
+	if ! sh "$GEN_SCRIPT" "$candidate" || [ ! -s "$candidate" ]; then
+		apply_state generate_failed
+		rm -f "$candidate"
 		return 1
 	fi
-	if [ ! -s "$HONK_CONF" ]; then
-		echo "honk: $HONK_CONF is empty, refusing to start"
-		return 1
+	if is_running && "$API_SCRIPT" runtime >/dev/null 2>&1; then
+		result="$("$API_SCRIPT" validate "$candidate")"
+		if [ "$?" -ne 0 ] || [ "$(printf '%s' "$result" | jsonfilter -e '@.valid')" != "true" ]; then
+			apply_state validation_failed
+			# Native diagnostics redact submitted values; preserve them for the status page.
+			printf '%s' "$result" > "$RUN_DIR/validation.json"
+			rm -f "$candidate"
+			return 1
+		fi
+		printf '%s' "$result" > "$RUN_DIR/validation.json"
 	fi
+	mv "$candidate" "$HONK_CONF"
 }
 
 start_service() {
@@ -87,6 +104,7 @@ start_service() {
 	}
 
 	prepare_data_dir
+	mkdir -p "$RUN_DIR"
 	mount_bpffs
 	check_geo
 	generate || return 1
@@ -97,17 +115,20 @@ start_service() {
 	# procd 的 logfile 参数在这台固件上不创建文件，所以用 sh -c 'exec ...'
 	# 自己重定向：exec 会让 honk-core 顶替 sh，procd 跟踪的 pid 仍然是它，
 	# 停止和 respawn 都正常。
-	procd_set_param command /bin/sh -c 		"exec $bin -c '$HONK_CONF' --data-dir '$(data_dir)' --disable-timestamp >>/var/log/honk.log 2>&1"
+	procd_set_param command /bin/sh -c "exec $bin -c '$HONK_CONF' --data-dir '$(data_dir)' --disable-timestamp >>/var/log/honk.log 2>&1"
 	procd_set_param env DAE_LOCATION_ASSET="$(geo_dir)"
 	procd_set_param respawn 3600 5 5
 	procd_set_param stdout 0
 	procd_set_param stderr 0
 	procd_set_param limits core="unlimited"
 	procd_close_instance
+	ucode /usr/share/honk/restart-key.uc > "$RUN_DIR/restart.key"
+	uci -q get honk.infra.native_api_port > "$RUN_DIR/api-port"
+	apply_state starting
 }
 
 stop_service() {
-	# procd 负责发信号；这里只清掉可能残留的 pinned map
+	apply_state stopped
 	return 0
 }
 
@@ -124,18 +145,29 @@ reload_service() {
 	enable
 
 	generate || return 1
-	local bin
-	bin="$(honk_bin)" || return 1
-
-	# 没在跑就直接启动。之前这里无条件发 SIGHUP，而 SIGHUP 只对运行中的
-	# 实例有意义——从 LuCI 点"启用"保存触发的是 reload，于是永远起不来。
 	if ! is_running; then
 		start
 		return $?
 	fi
 
-	# honk 读 /run/honk-core.lock 发 SIGHUP，运行实例自己决定 apply 还是 reject
-	"$bin" reload
+	local key
+	key="$(ucode /usr/share/honk/restart-key.uc)" || return 1
+	if [ "$key" != "$(cat "$RUN_DIR/restart.key" 2>/dev/null)" ] ||
+	   ! "$API_SCRIPT" runtime >/dev/null 2>&1; then
+		stop
+		start
+		return $?
+	fi
+
+	# The native API reports actual admission and completion, unlike SIGHUP.
+	local result
+	result="$("$API_SCRIPT" reload)"
+	if [ "$?" -ne 0 ]; then
+		apply_state reload_failed
+		return 1
+	fi
+	printf '%s' "$result" > "$RUN_DIR/apply.json"
+
 }
 
 service_triggers() {
