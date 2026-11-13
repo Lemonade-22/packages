@@ -15,7 +15,7 @@
 		"order": 10,
 		"action": {
 			"type": "view",
-			"path": "hk2/client"
+			"path": "hk3/client"
 		}
 	},
 	"admin/services/honk_new/node": {
@@ -23,7 +23,7 @@
 		"order": 20,
 		"action": {
 			"type": "view",
-			"path": "hk2/node"
+			"path": "hk3/node"
 		}
 	},
 	"admin/services/honk_new/status": {
@@ -31,7 +31,7 @@
 		"order": 30,
 		"action": {
 			"type": "view",
-			"path": "hk2/status"
+			"path": "hk3/status"
 		}
 	}
 }

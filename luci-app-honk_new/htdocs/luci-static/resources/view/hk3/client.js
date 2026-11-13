@@ -5,7 +5,7 @@
 'require ui';
 'require fs';
 'require poll';
-'require hk2';
+'require hk3';
 
 /*
  * luci-app-honk_new · 客户端设置
@@ -33,7 +33,7 @@ return view.extend({
 		}).then(function(res) {
 			// LAN 接口候选直接取 ubus 的 network.device，「网络 → 设备」页用的同一个源。
 			// 有的机型没有 br-lan 网桥、只有 eth0/eth1，这一项必须能改。
-			return hk2.deviceStatus().then(function(devs) {
+			return hk3.deviceStatus().then(function(devs) {
 				res.netdevs = Object.keys(devs || {})
 					.filter(function(n) { return n !== 'lo' && n !== 'dae0'; })
 					.map(function(n) {
@@ -59,7 +59,8 @@ return view.extend({
 		s.tab('ssid', _('多SSID分流'));
 		s.tab('dns', _('DNS'));
 		s.tab('control', _('访问控制'));
-		s.tab('diversion', _('分流控制'));
+		s.tab('diversion', _('域名分流'));
+		s.tab('custom', _('自定义规则'));
 
 
 		var o = s.taboption('routing', form.Flag, 'enabled', _('启用 honk'));
@@ -576,12 +577,12 @@ return view.extend({
 
 		/* 自定义路由规则：整段替换 routing { } */
 		/* 自定义路由规则 */
-		o = s.taboption('diversion', form.Flag, 'custom_rules_enabled', _('启用自定义规则'),
+		o = s.taboption('custom', form.Flag, 'custom_rules_enabled', _('启用自定义规则'),
 			_('这会整段替换路由规则。开启后，多SSID分流、访问控制、分流控制、IPv6 模式、' +
 			  '端口白名单和 QUIC 设置全部失效；兜底那条 fallback 也要你自己写。'));
 		o.rmempty = false;
 
-		o = s.taboption('diversion', form.TextValue, '_custom_rules', _('路由规则'),
+		o = s.taboption('custom', form.TextValue, '_custom_rules', _('路由规则'),
 			_('写 routing { } 的内部内容，dae 语法，一行一条规则。' +
 			  '开关关闭时这里显示的是当前实际生效的规则，只读；开启后你写的内容会整段替换它们。' +
 			  '内容存在 /etc/honk_new/custom.rules 里，不走 UCI。'));
@@ -641,7 +642,7 @@ return view.extend({
 			'fallback: proxy'
 		].join('\n');
 		return m.render().then(function(el) {
-			hk2.mountStatusBanner(el);
+			hk3.mountStatusBanner(el);
 			return el;
 		});
 	}

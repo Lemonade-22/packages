@@ -5,7 +5,7 @@
 'require ui';
 'require fs';
 'require poll';
-'require hk2';
+'require hk3';
 
 /*
  * luci-app-honk_new · 服务状态
@@ -65,7 +65,7 @@ return view.extend({
 
 		o = s.taboption('status', form.DummyValue, '_probe', _('连通性'));
 		o.rawhtml = true;
-		o.cfgvalue = function() { return hk2.renderConnection(); };
+		o.cfgvalue = function() { return hk3.renderConnection(); };
 
 		/* 资源：geo 数据在不在、多大、什么时候更新的 */
 		o = s.taboption('status', form.DummyValue, '_res', _('规则资源'));
@@ -97,7 +97,7 @@ return view.extend({
 					return fs.exec('/usr/share/honk_new/update-geo.sh').then(function(res) {
 						out.textContent = (res.stdout || '') + (res.stderr || '');
 						if (res.code !== 0) throw new Error(res.stderr || _('规则下载失败'));
-						return hk2.reload();
+						return hk3.reload();
 					}).then(function() {
 						out.textContent += '\n\nhonk 已重载。';
 					}).catch(function(e) { out.textContent = String(e); });
@@ -233,18 +233,18 @@ return view.extend({
 		o.inputtitle = _('重新生成');
 		o.inputstyle = 'apply';
 		o.onclick = function() {
-			return hk2.reload().then(function() {
+			return hk3.reload().then(function() {
 				ui.addNotification(null, E('p', {}, _('已重新载入已保存的配置。未保存的表单请使用“保存并应用”。')), 'info');
 			}).catch(function(e) { ui.addNotification(null, E('p', {}, e.message), 'error'); });
 		};
 
 
 		
-		var applyStatus = hk2.renderApplyStatus();
+		var applyStatus = hk3.renderApplyStatus();
 
 		return m.render().then(function(el) {
 			el.appendChild(applyStatus);
-			hk2.mountStatusBanner(el);
+			hk3.mountStatusBanner(el);
 			return el;
 		});
 	}
