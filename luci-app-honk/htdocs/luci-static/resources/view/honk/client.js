@@ -1162,8 +1162,8 @@ return view.extend({
 		/* 顶部运行状态条，照 HomeProxy 的做法：先判断有没有装、有没有在跑，
 		   再决定文字和颜色。没装的时候提示去装，而不是空着。 */
 		var _statusBanner = E('div', {
-			'style': 'padding:10px 14px;margin:0 0 12px;border-radius:4px;' +
-			         'font-weight:600;font-size:14px;background:#f6f6f6;color:#555;'
+			'style': 'padding:8px 0;margin:0 0 10px;font-weight:600;font-size:14px;' +
+			         'font-style:italic;color:#d9534f;border-bottom:1px solid #ddd;'
 		}, _('正在读取 honk 状态…'));
 
 		function refreshBanner() {
@@ -1194,7 +1194,15 @@ return view.extend({
 		poll.add(refreshBanner, 10);
 
 		return m.render().then(function(el) {
-			el.insertBefore(_statusBanner, el.firstChild);
+			// HomeProxy 的排版：标题 → 副标题 → 状态行 → 选项卡。
+			// 所以在副标题后面插入，而不是整页最前面。
+			var anchor = el.querySelector('.cbi-map-descr');
+			if (anchor && anchor.nextSibling)
+				el.insertBefore(_statusBanner, anchor.nextSibling);
+			else if (anchor)
+				el.appendChild(_statusBanner);
+			else
+				el.insertBefore(_statusBanner, el.firstChild);
 			return el;
 		});
 	}
