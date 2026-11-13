@@ -175,9 +175,16 @@ function mountStatusBanner(el) {
 
 	// 「保存并应用」之后 LuCI 会重渲染 map，把外面插进来的节点冲掉。
 	// 这里把插入单独抽出来，掉了就重新挂回去，别让状态凭空消失。
-	function place() {
-		var host = el.isConnected ? el : document.querySelector('#cbi-honk');
-		if (!host) return;
+	// 只能往「文档里真正的那个 map」上插。m.render() 的回调里 el 还没进文档，
+	// 就算插进去也会随着 LuCI 挂载时换节点一起丢掉 —— 表现就是横幅要等十几秒
+	// 才能在轮询里补回来。这里等它进文档，最多等 5 秒。
+	function place(tries) {
+		tries = tries || 0;
+		var host = document.getElementById('cbi-honk');
+		if (!host) {
+			if (tries < 50) window.setTimeout(function() { place(tries + 1); }, 100);
+			return;
+		}
 
 		var anchor = host.querySelector('.cbi-map-descr');
 		if (anchor && anchor.nextSibling)
