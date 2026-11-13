@@ -334,7 +334,8 @@ return view.extend({
 
 		// 标题留空会让标题列塌成一条，tooltip 图标单独掉到按钮左上方。
 		// 给个正常标题，图标就和文字对齐了。
-		o = s.taboption('ssid', form.DummyValue, '_ssid_hint', _('无线网络'), ' ');
+		// description 必须真空串：CSS :empty 里一个空格也算内容，会触发主题的 help 图标
+		o = s.taboption('ssid', form.DummyValue, '_ssid_hint', _('无线网络'), '');
 		o.rawhtml = true;
 		o.cfgvalue = function() {
 			var btn = E('button', {
