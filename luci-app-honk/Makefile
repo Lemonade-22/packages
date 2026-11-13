@@ -6,14 +6,18 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=luci-app-honk
 PKG_VERSION:=20261113
-PKG_RELEASE:=3
+PKG_RELEASE:=4
 
 LUCI_TITLE:=LuCI for honk - eBPF transparent proxy
 # honk-core 不在标准 feed 里，装完本插件后自行安装（daeuniverse 源或自编），
 # 这里不写死依赖，否则整条 CI 会因为找不到包而失败。
 LUCI_DEPENDS:=+luci-base +curl +ca-bundle +ucode +ucode-mod-uci +ucode-mod-fs +jsonfilter +logrotate
-# 包里带了 honk-core 二进制，必须跟随目标架构，不能标 all
-# （CI 会把对应架构的 honk-core 放进 root/usr/bin/）
+
+# 包里带了 honk-core 二进制，必须跟随目标架构。
+# luci.mk 的缺省是 LUCI_PKGARCH=all，把它直接赋给 PKGARCH，于是产物标成
+# noarch —— apk 认为它跟架构无关，能装到任何设备上，装上之后二进制跑不起来。
+# 这里覆盖成构建目标自己的架构包名（aarch64_cortex-a53 之类）。
+LUCI_PKGARCH:=$(ARCH_PACKAGES)
 
 define Package/$(PKG_NAME)/conffiles
 /etc/config/honk
