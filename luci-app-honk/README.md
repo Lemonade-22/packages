@@ -31,7 +31,7 @@ honk-core（TC eBPF 数据面）
 | --- | --- |
 | 节点 | 手动节点增删改 + 导入分享链接；下方「当前节点」表列出内核实际加载的节点（名称/延迟/测试/类型/地址/订阅） |
 | 分组 | 组的策略/成员/订阅成员/检查URL/容忍/final，每行一个「应用」按钮 = 设成主分组；下方显示运行中的分组状态 |
-| 订阅 | 订阅地址/标识/间隔/UA + 独立的「已生效订阅」卡片（节点数/状态/更新时间/刷新） |
+| 订阅 | 订阅地址/标识/间隔/UA + 独立的「已生效订阅」卡片（节点数/状态/最近错误） |
 
 ### 服务状态
 
@@ -136,7 +136,9 @@ protobuf 裁剪工具，暂未实现。
 
 ## 怎么装 honk-core 本身
 
-本插件只提供前端。honk-core 不在 OpenWrt/ImmortalWrt 官方源里，要另装：
+本仓 GitHub Release 的 ARM64/AMD64 APK **已包含 honk-core v0.1.0-beta.6**，无需再次安装内核。
+
+直接将本目录放入其他构建树时，Makefile 本身不下载内核；这种源码构建方式需自行提供兼容内核。下列软件源安装方式仅供未包含内核的构建使用，避免和已有内核包混装：
 
 ```sh
 # 1) 导入 daeuniverse 的签名公钥
@@ -162,3 +164,17 @@ honk 走 TCX，要 `CONFIG_NET_XGRESS`（不是 dae 用的 `NET_CLS_BPF`）。�
 `CONFIG_CGROUP_BPF`、`CONFIG_DEBUG_INFO_BTF`、cgroup v2 和已挂载的 `/sys/fs/bpf`。
 
 升级提示：此版本沿用 luci-app-honk 包名。旧版 honk_new 的 /etc/config/honk_new 及 /etc/honk_new 不会自动迁移；安装前请备份并核对配置。旧版 honk 配置的兼容性也需检查，避免两个服务同时运行。
+
+## 稳定性回归检查
+
+Linux / WSL 安装 uci、ucode（含 uci/fs 模块）后运行：
+
+```sh
+python3 luci-app-honk/tools/check-uci-sections.py luci-app-honk/root/etc/config/honk
+python3 luci-app-honk/tools/test-regressions.py
+node luci-app-honk/tools/test-ui-operations.js
+```
+
+测试覆盖默认配置、IPv6 各模式、多 SSID、自定义规则、订阅与手动节点混合、无效配置保留旧文件，以及广告列表下载失败/空结果保留旧数据。它不替代路由器上的 eBPF、实际节点和 LuCI 交互测试。
+
+规则下载通过后台任务执行，重复点击会等待正在执行的任务。订阅更新受理后继续查询原操作编号，不因查询中断再次提交刷新。节点延迟是 TCP/IPv4 HTTP 探测，六站测试是路由器侧网站连接测试，不代表每个终端的代理链路。

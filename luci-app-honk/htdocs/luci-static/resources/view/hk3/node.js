@@ -557,21 +557,14 @@ function bindSort(table) {
  * 串行不并发：几十个节点一起探会把 conntrack 和出口打满，全变超时。
  * 靠每行按钮自己挂的 runProbe() 串起来，不轮询文字。
  */
-/*
- * 刷新一条订阅。
- *
- * 浏览器在页面跳转、请求被取消时会抛 "XHR request aborted by browser"，
- * 那是传输层的偶发中断，不是内核拒绝。重试一次就够了——真失败（比如内核
- * 没起来）不会因为重试而变好，第二次仍然会报出来。
- */
-function refreshSubscription(id, attempt) {
-	attempt = attempt || 1;
-	return hk3.api('provider-refresh', id).then(hk3.waitOperation).catch(function(e) {
-		var msg = String((e && e.message) || e);
-		if (attempt < 2 && /abort/i.test(msg))
-			return refreshSubscription(id, attempt + 1);
+/* 刷新只提交一次；已受理任务的查询重试由公共模块处理。 */
+function refreshSubscription(id) {
+	// A lost response does not mean the POST failed. Never resubmit blindly.
+	return hk3.api('provider-refresh', id).catch(function(e) {
+		if (/abort/i.test(String(e.message || e)))
+			throw new Error(_('请求中断，更新可能已开始。请查看已生效订阅状态，勿重复提交。'));
 		throw e;
-	});
+	}).then(hk3.waitOperation);
 }
 
 /*
@@ -741,7 +734,7 @@ function renderProviderNodes(data, tag) {
 		'style': 'width:100%;border-collapse:separate;border-spacing:0;' +
 		         'border:0;border-radius:0;background:transparent' },
 		E('tr', { 'class': 'tr table-titles' },
-			[{ t: _('名称'), k: 'name' }, { t: _('延迟'), k: 'latency' },
+			[{ t: _('名称'), k: 'name' }, { t: _('TCP / IPv4 延迟'), k: 'latency' },
 			 { t: _('测试'), k: null }, { t: _('类型'), k: 'type' }].map(function(col) {
 				// 表头吸顶：往下滚时它得钉住，否则会跟着内容走、看着像错位到数据行中间。
 				//
@@ -800,7 +793,7 @@ function renderProviderNodes(data, tag) {
 					var ok = sample.state === 'healthy' && typeof sample.latency_ms === 'number';
 					cell.textContent = ok ? Math.round(sample.latency_ms) + ' ms' : (sample.state === 'unavailable' ? _('不可用') : _('未测'));
 					cell.style.color = ok ? 'green' : 'red';
-					cell.title = _('TCP / IPv4 HTTP 测试') + (sample.error ? ': ' + sample.error : '');
+					cell.title = _('TCP / IPv4 HTTP 测试') + ' · ' + new Date().toLocaleString() + (sample.error ? ': ' + (sample.error.message || sample.error.code || sample.error) : '');
 					tr.setAttribute('data-latency', ok ? String(sample.latency_ms) : 'Infinity');
 				}).catch(function(e) { cell.textContent = _('测试失败'); cell.style.color = 'red'; cell.title = e.message || String(e); })
 				.finally(function() { btn.disabled = false; });

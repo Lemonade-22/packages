@@ -56,7 +56,7 @@ return view.extend({
 
 		o = s.option(form.DummyValue, '_probe', _('连通性'));
 		o.rawhtml = true;
-		o.cfgvalue = function() { return hk3.renderConnection(); };
+		o.cfgvalue = function() { return hk3.fullRow(hk3.renderConnection()); };
 
 		/* 资源：geo 数据在不在、多大、什么时候更新的 */
 		o = s.option(form.DummyValue, '_res', _('规则资源'));
@@ -85,20 +85,21 @@ return view.extend({
 					}, _('正在下载 GeoIP / GeoSite…'));
 					ui.showModal(_('更新规则资源'), [out, E('div', { 'class': 'right' },
 						E('button', { 'class': 'btn', 'click': ui.hideModal }, _('关闭')))]);
-					return fs.exec('/usr/share/honk/update-geo.sh').then(function(res) {
+					return hk3.runTask('geo', function(log) { out.textContent = log || _('正在下载…'); }).then(function(res) {
 						out.textContent = (res.stdout || '') + (res.stderr || '');
 						if (res.code !== 0) throw new Error(res.stderr || _('规则下载失败'));
-						return hk3.reload();
+						return hk3.applyService();
 					}).then(function() {
-						out.textContent += '\n\nhonk 已重载。';
+						out.textContent += '\n\n规则已更新，服务已按已保存配置应用。';
+						return refreshStats();
 					}).catch(function(e) { out.textContent = String(e); });
 				})
 			}, _('更新全部'));
 
-			return Promise.all(files.map(function(item) {
-				return fs.stat('/usr/share/honk/geo/' + item[0])
-					.catch(function() { return null; });
-			})).then(function(stats) {
+			function refreshStats() { return fs.exec('/usr/share/honk/resource-status.sh').then(function(res) {
+				if (res.code !== 0) throw new Error(res.stderr || _('无法读取资源状态'));
+				var stats = JSON.parse(res.stdout).map(function(row) { return row.size != null ? row : null; });
+				while (table.children.length > 1) table.removeChild(table.lastChild);
 				files.forEach(function(item, i) {
 					var st = stats[i];
 					table.appendChild(E('tr', { 'class': 'tr' }, [
@@ -109,7 +110,7 @@ return view.extend({
 						E('td', { 'class': 'td' },
 							st ? (Math.round(st.size / 1024) + ' KB') : '-'),
 						E('td', { 'class': 'td' },
-							(st && st.mtime) ? new Date(st.mtime).toLocaleString() : '-')
+							(st && st.mtime) ? new Date(st.mtime * 1000).toLocaleString() : '-')
 					]));
 				});
 				if (!stats.some(Boolean))
@@ -117,10 +118,9 @@ return view.extend({
 						E('td', { 'class': 'td', 'colspan': 4 },
 							_('一个都没有。geo 规则会静默失效，honk 只打 WARN 不会报错。'))
 					]));
-				return E('div', {}, [
-					E('div', { 'style': 'margin-bottom:8px' }, [ updBtn ]),
-					table
-				]);
+			}); }
+			return refreshStats().then(function() {
+				return hk3.fullRow(E('div', {}, [E('div', { style: 'margin-bottom:8px' }, [updBtn]), table]));
 			});
 		};
 
@@ -133,15 +133,19 @@ return view.extend({
 				'style': 'height:22em;overflow:auto;white-space:pre-wrap;word-break:break-all;' +
 					'font-family:monospace;font-size:12px;margin:0;'
 			}, data.log || _('（暂无日志）'));
+			var paused = false;
+			var pause = E('button', { class: 'btn', click: function(ev) { ev.preventDefault(); paused = !paused; pause.textContent = paused ? _('继续刷新') : _('暂停刷新'); } }, _('暂停刷新'));
+			var copy = E('button', { class: 'btn', click: function(ev) { ev.preventDefault(); return Promise.resolve().then(function() { return navigator.clipboard.writeText(box.textContent); }).catch(function() { ui.addNotification(null, E('p', {}, _('浏览器不允许复制，请手动选择日志')), 'warning'); }); } }, _('复制日志'));
 			poll.add(function() {
-				if (!box.isConnected) return;
+				if (paused || !hk3.visible(box)) return;
 				return fs.exec('/usr/share/honk/log-tail.sh').then(function(res) {
+					var follow = box.scrollHeight - box.scrollTop - box.clientHeight < 30;
 					var txt = res.stdout;
 					box.textContent = txt || _('（暂无日志）');
-					box.scrollTop = box.scrollHeight;
+					if (follow) box.scrollTop = box.scrollHeight;
 				}).catch(function() {});
 			}, 5);
-			return box;
+			return E('div', {}, [E('div', { style: 'display:flex;gap:8px;margin-bottom:8px' }, [pause, copy]), box]);
 		};
 
 		/* 仪表盘：装了什么就显示什么入口。
@@ -217,7 +221,7 @@ return view.extend({
 			}
 
 			check();
-			poll.add(function() { if (!box.isConnected) return; return check(); }, 15);
+			poll.add(function() { if (!hk3.visible(box)) return; return check(); }, 15);
 			return box;
 		};
 
@@ -225,7 +229,7 @@ return view.extend({
 		o.inputtitle = _('重新生成');
 		o.inputstyle = 'apply';
 		o.onclick = function() {
-			return hk3.reload().then(function() {
+			return hk3.applyService().then(function() {
 				ui.addNotification(null, E('p', {}, _('已重新载入已保存的配置。未保存的表单请使用“保存并应用”。')), 'info');
 			}).catch(function(e) { ui.addNotification(null, E('p', {}, e.message), 'error'); });
 		};

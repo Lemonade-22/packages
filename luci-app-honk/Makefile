@@ -6,11 +6,11 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=luci-app-honk
 PKG_VERSION:=20261113
-PKG_RELEASE:=6
+PKG_RELEASE:=7
 
 LUCI_TITLE:=LuCI for honk - eBPF transparent proxy (新界面)
-# honk-core 不在标准 feed 里，装完本插件后自行安装（daeuniverse 源或自编），
-# 这里不写死依赖，否则整条 CI 会因为找不到包而失败。
+# Release 工作流会注入 honk-core；单独源码构建需自行提供兼容内核。
+# 非标准 feed 不写死依赖，避免找不到包导致构建失败。
 LUCI_DEPENDS:=+luci-base +curl +ca-bundle +ucode +ucode-mod-uci +ucode-mod-fs +jsonfilter +logrotate
 
 # 包里带了 honk-core 二进制，必须跟随目标架构。
@@ -29,60 +29,16 @@ endef
 # 少了 /etc/honk 就会出现「保存表单时出错：未找到资源」。
 define Package/$(PKG_NAME)/postinst
 #!/bin/sh
-[ -d /etc/honk ] || mkdir -p /etc/honk
-[ -f /etc/honk/custom.rules ] || touch /etc/honk/custom.rules
-[ -f /etc/honk/adblock.list ] || touch /etc/honk/adblock.list
-mkdir -p /var/lib/honk/state
-chmod 700 /var/lib/honk/state
-# luci.mk 把 root/usr/share/ 下的文件按 644 装，而 rpcd 的 fs.exec 要求可执行。
-# 订阅刷新、连通性测试、资源更新全靠这些脚本，少了 x 位整页都报"未找到资源"。
-chmod 755 /usr/share/honk/*.sh 2>/dev/null
-mkdir -p /var/run/honk
-chmod 755 /var/run/honk 2>/dev/null
-# 有些机型没有 br-lan 网桥，只有 eth0/eth1 这种裸网口。
-# 默认值写死 br-lan 的话，这些机器装完 honk 会报找不到接口、什么都不代理。
-# 装包时按 network 配置和实际网卡挑一个，用户之后仍可在界面上改。
-if [ ! -e /sys/class/net/br-lan ]; then
-	lan_dev="$(uci -q get network.lan.device 2>/dev/null)"
-	[ -n "$lan_dev" ] || lan_dev="$(uci -q get network.lan.ifname 2>/dev/null)"
-	if [ -z "$lan_dev" ]; then
-		for cand in eth1 br0 lan0 eth0; do
-			[ -e "/sys/class/net/$cand" ] && { lan_dev="$cand"; break; }
-		done
-	fi
-	[ -n "$lan_dev" ] && uci -q set honk.infra.lan_interface="$lan_dev"
-fi
-uci -q commit honk 2>/dev/null
+[ -n "$${IPKG_INSTROOT}" ] && exit 0
+/bin/sh /usr/share/honk/package-setup.sh
 exit 0
 endef
 
 # 升级走的是另一条钩子，不补的话覆盖安装后目录又没了
 define Package/$(PKG_NAME)/postupgrade
 #!/bin/sh
-[ -d /etc/honk ] || mkdir -p /etc/honk
-[ -f /etc/honk/custom.rules ] || touch /etc/honk/custom.rules
-[ -f /etc/honk/adblock.list ] || touch /etc/honk/adblock.list
-mkdir -p /var/lib/honk/state
-chmod 700 /var/lib/honk/state
-# luci.mk 把 root/usr/share/ 下的文件按 644 装，而 rpcd 的 fs.exec 要求可执行。
-# 订阅刷新、连通性测试、资源更新全靠这些脚本，少了 x 位整页都报"未找到资源"。
-chmod 755 /usr/share/honk/*.sh 2>/dev/null
-mkdir -p /var/run/honk
-chmod 755 /var/run/honk 2>/dev/null
-# 有些机型没有 br-lan 网桥，只有 eth0/eth1 这种裸网口。
-# 默认值写死 br-lan 的话，这些机器装完 honk 会报找不到接口、什么都不代理。
-# 装包时按 network 配置和实际网卡挑一个，用户之后仍可在界面上改。
-if [ ! -e /sys/class/net/br-lan ]; then
-	lan_dev="$(uci -q get network.lan.device 2>/dev/null)"
-	[ -n "$lan_dev" ] || lan_dev="$(uci -q get network.lan.ifname 2>/dev/null)"
-	if [ -z "$lan_dev" ]; then
-		for cand in eth1 br0 lan0 eth0; do
-			[ -e "/sys/class/net/$cand" ] && { lan_dev="$cand"; break; }
-		done
-	fi
-	[ -n "$lan_dev" ] && uci -q set honk.infra.lan_interface="$lan_dev"
-fi
-uci -q commit honk 2>/dev/null
+[ -n "$${IPKG_INSTROOT}" ] && exit 0
+/bin/sh /usr/share/honk/package-setup.sh
 exit 0
 endef
 

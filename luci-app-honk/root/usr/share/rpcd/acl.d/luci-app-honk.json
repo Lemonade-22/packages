@@ -35,6 +35,15 @@
 				],
 				"/usr/share/honk/geo/*": [
 					"stat"
+				],
+				"/var/run/honk/task-*/status": [
+					"read"
+				],
+				"/var/run/honk/task-*/log": [
+					"read"
+				],
+				"/usr/share/honk/resource-status.sh": [
+					"exec"
 				]
 			},
 			"ubus": {
@@ -75,6 +84,9 @@
 					"exec"
 				],
 				"/etc/init.d/honk": [
+					"exec"
+				],
+				"/usr/share/honk/task.sh": [
 					"exec"
 				]
 			},

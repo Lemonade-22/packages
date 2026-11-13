@@ -30,11 +30,46 @@ function describeError(e) {
    procd 的 uci trigger 只有在该服务开机时被 enable 过才注册，刚装完的机器上
    等于没有，于是打开开关点应用什么也不会发生。这里显式跑一次 reload。 */
 function applyService() {
-	return fs.exec('/etc/init.d/honk', ['reload']).catch(function(e) {
-		return (e && e.message) || '';
+	return runTask('apply').then(function() {
+		return fs.read('/var/run/honk/apply.json');
+	}).then(function(text) {
+		var state = JSON.parse(text);
+		if (state.operation_id) return waitOperation(state, 60000);
+		if (state.status === 'stopped') return state;
+		if (state.status !== 'starting') throw new Error(_('配置应用失败：') + state.status);
+		var until = Date.now() + 30000;
+		function ready() {
+			return api('runtime').catch(function(e) {
+				if (Date.now() >= until) throw new Error(_('启动尚未就绪，请查看运行日志'));
+				return new Promise(function(resolve) { window.setTimeout(resolve, 1500); }).then(ready);
+			});
+		}
+		return ready();
 	});
 }
 
+function visible(node) {
+	return !document.hidden && node.isConnected && node.getClientRects().length > 0;
+}
+function runTask(kind, progress) {
+	return fs.exec('/usr/share/honk/task.sh', [kind]).then(function(res) {
+		if (res.code !== 0) throw new Error(res.stderr || _('无法启动任务'));
+		var until = Date.now() + 1800000;
+		function check() {
+			return fs.read('/var/run/honk/task-' + kind + '/status').then(function(raw) {
+				return fs.read('/var/run/honk/task-' + kind + '/log').catch(function() { return ''; }).then(function(log) {
+					if (progress) progress(log);
+					var state = raw.trim();
+					if (state === 'succeeded') return { code: 0, stdout: log };
+					if (state === 'failed') throw new Error(log || _('任务失败'));
+					if (Date.now() > until) throw new Error(_('任务仍在后台执行，请稍后重新查看'));
+					return new Promise(function(resolve) { window.setTimeout(resolve, 2000); }).then(check);
+				});
+			});
+		}
+		return check();
+	});
+}
 function api() {
 	var args = Array.prototype.slice.call(arguments);
 	var script = READ_ACTIONS[args[0]] ? '/usr/share/honk/honk-read.sh' : '/usr/share/honk/honk-api.sh';
@@ -55,13 +90,16 @@ function page(kind, cursor, collected) {
 }
 function waitOperation(accepted, timeout) {
 	if (!accepted.operation_id) return Promise.reject(new Error(_('内核未返回操作编号')));
-	var until = Date.now() + (timeout || 60000);
+	var until = Date.now() + (timeout || 60000), delay = 500;
 	function check() {
-		return api('operation', accepted.operation_id).then(function(op) {
+		return api('operation', accepted.operation_id).catch(function(e) {
+			if (/abort/i.test(String(e.message || e)) && Date.now() < until) return { status: 'pending' };
+			throw e;
+		}).then(function(op) {
 			if (op.status === 'succeeded') return op.result;
 			if (op.status === 'failed') throw new Error((op.error || {}).message || _('操作失败'));
 			if (Date.now() >= until) throw new Error(_('等待超时，内核操作可能仍在执行，请刷新状态后查看'));
-			return new Promise(function(resolve) { window.setTimeout(resolve, 500); }).then(check);
+			return new Promise(function(resolve) { window.setTimeout(resolve, delay); delay = Math.min(3000, delay + 500); }).then(check);
 		});
 	}
 	return check();
@@ -93,9 +131,8 @@ function renderConnection() {
 		return new Promise(function(resolve) {
 			var settled = false;
 			function finish(result) { if (!settled) { settled = true; resolve(result); } }
-			// 后端最长 16 秒。前端留一点余量，否则代理首包慢的时候
-			// 后端还在等，界面已经报"超时"了，看起来像是测试坏了。
-			var timer = window.setTimeout(function() { finish({ timed_out: true }); }, 18000);
+			// 并行测试每站最多 8 秒，前端 12 秒兜底，避免占满 RPC 超时预算。
+			var timer = window.setTimeout(function() { finish({ timed_out: true }); }, 12000);
 			connectionCheck('all').then(function(r) { window.clearTimeout(timer); finish(r); }, function() { window.clearTimeout(timer); finish({ failed: true }); });
 		}).then(function(result) {
 			if (generation !== current) return;
@@ -103,12 +140,13 @@ function renderConnection() {
 			(result.results || []).forEach(function(r) { rows[r.site] = r; });
 			Object.keys(cells).forEach(function(k) {
 				var r = rows[k] || { timed_out: result.timed_out }, c = cells[k];
-				c.state.textContent = r.result ? _('成功') : (r.timed_out ? _('超时') : _('失败'));
+				c.state.textContent = r.result ? _('成功') : (r.error || (r.timed_out ? _('超时') : _('失败')));
 				c.state.style.color = r.result ? 'green' : 'red';
 				c.latency.textContent = r.result ? r.latency_ms + ' ms' : '-';
+				c.state.title = _('测试时间：') + new Date().toLocaleString() + (r.http_code ? ' · HTTP ' + r.http_code : '');
 			});
 		}).finally(function() { if (generation === current) { running = false; button.disabled = false; } });
-	} }, _('测试全部'));
+	} }, _('测试全部（路由器侧）'));
 	return E('div', {}, [E('div', { style: 'margin-bottom:8px' }, button), table]);
 }
 
@@ -142,14 +180,21 @@ function layoutFullRows(root) {
  * 顶部运行状态条。三个页面都要有，所以放在共用模块里，
  * 位置照 HomeProxy —— 挂在副标题（.cbi-map-descr）下面，不是页面最顶上。
  */
+var activeBanner = null;
 function mountStatusBanner(el) {
+	if (!document.getElementById('honk-common-style')) document.head.appendChild(E('style', { id: 'honk-common-style' },
+		'.honk-status-banner{padding:8px 0;margin:0 0 10px;font-weight:600;font-size:14px;font-style:italic;border-bottom:1px solid #ddd}' +
+		'#cbi-honk details>summary{cursor:pointer;padding:8px 0}#cbi-honk .btn:disabled{opacity:.6}' +
+		'#cbi-honk .table .td{vertical-align:middle}#cbi-honk .honk-full-row{width:100%;overflow-x:auto}'));
+
 	var banner = E('div', {
 		'class': 'honk-status-banner',
-		'style': 'padding:8px 0;margin:0 0 10px;font-weight:600;font-size:14px;' +
-		         'font-style:italic;color:#d9534f;border-bottom:1px solid #ddd;'
+		'style': 'color:#d9534f'
 	}, _('正在读取 honk 状态…'));
 
+	activeBanner = banner;
 	function refresh() {
+		if (activeBanner !== banner || document.hidden) return;
 		return fs.exec('/usr/share/honk/honk-status.sh').then(function(res) {
 			var parts = String(res.stdout || '').trim().split('|');
 			var state = parts[0] || 'missing';
@@ -179,6 +224,7 @@ function mountStatusBanner(el) {
 	// 就算插进去也会随着 LuCI 挂载时换节点一起丢掉 —— 表现就是横幅要等十几秒
 	// 才能在轮询里补回来。这里等它进文档，最多等 5 秒。
 	function place(tries) {
+		if (activeBanner !== banner) return;
 		tries = tries || 0;
 		var host = document.getElementById('cbi-honk');
 		if (!host) {
@@ -202,6 +248,7 @@ function mountStatusBanner(el) {
 
 	refresh();
 	poll.add(function() {
+		if (activeBanner !== banner || document.hidden) return;
 		if (!banner.isConnected) {
 			place();
 			return refresh();
@@ -271,7 +318,7 @@ function renderProviders() {
 	}
 
 	check();
-	poll.add(function() { if (!box.isConnected) return; return check(); }, 20);
+	poll.add(function() { if (!visible(box)) return; return check(); }, 20);
 	return fullRow(box);
 }
 
@@ -284,7 +331,9 @@ function renderPicking() {
 	}
 
 	function detail(g) {
-		var pane = E('div', { style: 'margin:6px 0 14px 12px;padding:8px 10px;border-left:3px solid #ddd' }, _('正在读取成员…'));
+		var pane = E('div', { style: 'margin:6px 0 14px 12px;padding:8px 10px;border-left:3px solid #ddd' }, _('展开后读取成员'));
+		var wrapper = E('details', {}, [E('summary', {}, _('成员与临时选择')), pane]);
+		wrapper.addEventListener('toggle', function() { if (wrapper.open) load(); });
 
 		function load() {
 			return api('group', g.id).then(function(full) {
@@ -349,8 +398,8 @@ function renderPicking() {
 			});
 		}
 
-		load();
-		return pane;
+		poll.add(function() { if (wrapper.open && visible(pane)) return load(); }, 30);
+		return wrapper;
 	}
 
 	function check() {
@@ -379,7 +428,7 @@ function renderPicking() {
 	}
 
 	check();
-	poll.add(function() { if (!box.isConnected) return; return check(); }, 30);
+	// Group list is loaded once; expanded members refresh independently.
 	return fullRow(box);
 }
 
@@ -393,6 +442,7 @@ function reload() {
 /* 上一轮应用的结局。init 脚本把结果写进 /var/run/honk/。 */
 function renderApplyStatus() {
 	var box = E('div', { 'class': 'cbi-value-description', style: 'margin:4px 0 10px' }, '');
+	var completed = {};
 
 	var TEXT = {
 		starting: [_('启动中'), '#ff9900'],
@@ -417,7 +467,7 @@ function renderApplyStatus() {
 			// 没有应用记录就把这一行整个撤掉。留一句"还没有应用记录"只是噪音：
 			// 横幅已经说了内核在不在跑，这里再挂个感叹号没人需要。
 			if (!apply) {
-				box.remove();
+				box.textContent = '';
 				return;
 			} else if (apply.status && !apply.operation_id) {
 				var t = TEXT[apply.status];
@@ -427,7 +477,8 @@ function renderApplyStatus() {
 				// reload 成功时 init 写的是原生 API 的返回体
 				label = _('配置重载已受理，正在查询结果');
 				color = '#888';
-				if (apply.operation_id) api('operation', apply.operation_id).then(function(op) {
+				if (apply.operation_id) Promise.resolve(completed[apply.operation_id] || api('operation', apply.operation_id)).then(function(op) {
+					if (op.status === 'succeeded' || op.status === 'failed') completed[apply.operation_id] = op;
 					box.textContent = op.status === 'succeeded' ? _('配置已生效') : (op.status === 'failed' ? _('配置重载失败：') + ((op.error || {}).message || '') : _('配置重载中'));
 				}).catch(function() { box.textContent = _('无法确认配置重载结果'); });
 			} else {
@@ -436,6 +487,9 @@ function renderApplyStatus() {
 			}
 
 			box.appendChild(E('span', { style: 'color:' + color + ';font-weight:600' }, label));
+			if (apply.status === 'starting') api('runtime').then(function() {
+				box.textContent = _('服务已启动');
+			}).catch(function() { /* Keep starting state until the API is ready. */ });
 
 			// 校验失败时把内核给的原因贴出来，不要只显示"失败"
 			if (validation && validation.valid === false) {
@@ -450,11 +504,11 @@ function renderApplyStatus() {
 	}
 
 	check();
-	poll.add(function() { if (!box.isConnected) return; return check(); }, 10);
+	poll.add(function() { if (!visible(box)) return; return check(); }, 10);
 	return box;
 }
 
-return baseclass.extend({ api: api, deviceStatus: function() { return deviceStatus(); }, nodes: function() { return page('nodes'); }, providers: function() { return page('providers'); },
+return baseclass.extend({ visible: visible, runTask: runTask, api: api, deviceStatus: function() { return deviceStatus(); }, nodes: function() { return page('nodes'); }, providers: function() { return page('providers'); },
 	waitOperation: waitOperation, health: health, renderConnection: renderConnection,
 	renderProviders: renderProviders, renderPicking: renderPicking, reload: reload, renderApplyStatus: renderApplyStatus,
 	describeError: describeError, applyService: applyService, mountStatusBanner: mountStatusBanner, fullRow: fullRow, layoutFullRows: layoutFullRows });

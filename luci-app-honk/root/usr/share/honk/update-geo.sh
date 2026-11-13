@@ -12,11 +12,13 @@ set -u
 GEO_DIR="$(uci -q get honk.infra.geo_asset_dir)"
 [ -n "$GEO_DIR" ] || GEO_DIR="/usr/share/honk/geo"
 
-GEOIP_URL="https://github.com/Loyalsoldier/geoip/releases/latest/download/geoip.dat"
+GEOIP_URL="https://github.com/Loyalsoldier/geoip/releases/latest/download/geoip-only-cn-private.dat"
 GEOSITE_URL="https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geosite.dat"
 
 mkdir -p "$GEO_DIR" || { echo "cannot create $GEO_DIR"; exit 1; }
 
+STAGE="$(mktemp -d "$GEO_DIR/.update.XXXXXX")" || exit 1
+trap 'rm -rf "$STAGE"' EXIT
 failed=0
 
 fetch() {
@@ -53,12 +55,14 @@ fetch() {
 	echo "  ok: $size bytes -> $out"
 }
 
-fetch "$GEOIP_URL" "$GEO_DIR/geoip.dat"
-fetch "$GEOSITE_URL" "$GEO_DIR/geosite.dat"
+fetch "$GEOIP_URL" "$STAGE/geoip.dat"
+fetch "$GEOSITE_URL" "$STAGE/geosite.dat"
 
 if [ "$failed" -gt 0 ]; then
 	echo "done with $failed failure(s)"
 	exit 1
 fi
 
+mv "$STAGE/geoip.dat" "$GEO_DIR/geoip.dat" || exit 1
+mv "$STAGE/geosite.dat" "$GEO_DIR/geosite.dat" || exit 1
 echo "all geo assets updated"

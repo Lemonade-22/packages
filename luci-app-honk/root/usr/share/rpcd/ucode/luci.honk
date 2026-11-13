@@ -23,12 +23,12 @@ return { "luci.honk": {
 			const sites = (requested_site === 'all') ? keys(CONNECTION_SITES) : [ requested_site ];
 			let commands = [];
 			for (let site in sites) {
-				push(commands, sprintf(
-					'/usr/bin/curl --location --silent --output /dev/null --user-agent %s --connect-timeout 10 --max-time 16 --write-out %s %s',
-					shellQuote('Mozilla/5.0'),
-					shellQuote(sprintf('%s\\t%%{http_code}\\t%%{time_appconnect}\\t%%{time_total}\\n', site)),
-					shellQuote(CONNECTION_SITES[site])
-				));
+                const command = sprintf(
+                    '/usr/bin/curl --location --silent --output /dev/null --user-agent %s --connect-timeout 5 --max-time 8 --write-out %s %s',
+                    shellQuote('Mozilla/5.0'), shellQuote('%{http_code}\\t%{time_appconnect}\\t%{time_total}'),
+                    shellQuote(CONNECTION_SITES[site]));
+                push(commands, sprintf('(out=$(%s); code=$?; printf %s "$out" "$code")',
+                    command, shellQuote(site + '\t%s\t%s\n')));
 			}
 
 			const fd = popen(sprintf('(%s & wait) 2>"/dev/null"', join(' & ', commands)));
@@ -53,17 +53,21 @@ return { "luci.honk": {
 
 			for (let response in split(trim(payload), /[\r\n]+/)) {
 				const fields = split(response, '\t');
-				if (length(fields) !== 4 || !CONNECTION_SITES[fields[0]])
+				if (length(fields) !== 5 || !CONNECTION_SITES[fields[0]])
 					continue;
 
 				const latency_ms = curlTimeMs(fields[2]);
 				const total_ms = curlTimeMs(fields[3]);
 				const http_code = int(fields[1] || '0');
+				const exit_code = int(fields[4] || '0');
+				const errors = { '6': 'DNS 解析失败', '7': '连接失败', '28': '超时', '35': 'TLS 握手失败', '60': '证书校验失败' };
 				responses[fields[0]] = {
 					site: fields[0],
-					result: http_code >= 100 && http_code <= 599,
+					result: exit_code === 0 && http_code >= 100 && http_code <= 599,
+					http_code, exit_code, total_ms,
+					error: exit_code ? (errors['' + exit_code] || '请求失败') : null,
 					latency_ms,
-					timed_out: http_code === 0 && total_ms >= 8900
+					timed_out: exit_code === 28
 				};
 			}
 

@@ -7,7 +7,7 @@
 set -u
 
 BIN=""
-for p in /usr/bin/honk-core /usr/sbin/honk-core /usr/bin/honk; do
+for p in /usr/sbin/honk-core /usr/bin/honk-core /sbin/honk-core /bin/honk-core; do
 	[ -x "$p" ] && BIN="$p" && break
 done
 
@@ -19,7 +19,7 @@ fi
 # 只取纯版本号（去掉 "honk-core " 前缀），前端统一拼前缀，避免出现重复
 VER="$($BIN --version 2>/dev/null | head -n 1 | tr -d '\r' | sed 's/^[^ ]* *//')"
 
-if pgrep -f "$(basename "$BIN")" >/dev/null 2>&1; then
+if ubus call service list '{"name":"honk"}' 2>/dev/null | grep -q '"running": true'; then
 	echo "running|$VER"
 else
 	echo "stopped|$VER"

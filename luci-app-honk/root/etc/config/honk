@@ -24,7 +24,7 @@ config honk 'infra'
 	option bootstrap_resolver '223.5.5.5:53'
 	option geo_asset_dir '/usr/share/honk/geo'
 # 首次安装留空给用户自己选；br-lan 不存在时这里不填
-	option lan_interface 'br-lan'
+	option lan_interface ''
 	option wan_interface 'auto'
 	option bind ''
 	option ipversion_prefer ''

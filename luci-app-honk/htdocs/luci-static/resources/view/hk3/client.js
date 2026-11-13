@@ -466,7 +466,7 @@ return view.extend({
 		o.depends('ad_block', '1');
 		o.rmempty = true;
 
-		o = ds.taboption('dns_advanced', form.Button, '_fetch_adblock', _('更新规则'));
+		o = ds.taboption('dns_advanced', form.Button, '_fetch_adblock', _('更新规则'), _('使用已保存并应用的规则源。修改来源后请先保存并应用。'));
 		o.inputtitle = _('立即更新');
 		o.inputstyle = 'apply';
 		o.depends('ad_block', '1');
@@ -477,14 +477,11 @@ return view.extend({
 			}, _('正在更新…'));
 			ui.showModal(_('更新广告规则'), [out, E('div', { 'class': 'right' },
 				E('button', { 'class': 'btn', 'click': ui.hideModal }, _('关闭')))]);
-			return uci.save().then(function() {
-				return fs.exec('/usr/share/honk/update-adblock.sh');
-			}).then(function(res) {
+			return hk3.runTask('adblock', function(log) { out.textContent = log || _('正在更新…'); }).then(function(res) {
 				out.textContent = (res.stdout || '') + (res.stderr || '');
-				return fs.read('/etc/honk/adblock.list').catch(function() { return ''; });
-			}).then(function(txt) {
-				var n = (txt || '').split('\n').filter(function(x) { return x.trim(); }).length;
-				out.textContent += '\n\n当前列表：' + n + ' 条';
+				return hk3.applyService();
+			}).then(function() {
+				out.textContent += '\n\n规则已更新，服务已按已保存配置应用。';
 			}).catch(function(e) { out.textContent = String(e); });
 		};
 

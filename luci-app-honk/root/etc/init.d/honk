@@ -90,6 +90,8 @@ generate() {
 			return 1
 		fi
 		printf '%s' "$result" > "$RUN_DIR/validation.json"
+	else
+		rm -f "$RUN_DIR/validation.json"
 	fi
 	mv "$candidate" "$HONK_CONF"
 }
