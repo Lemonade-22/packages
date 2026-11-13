@@ -30,6 +30,16 @@ return view.extend({
 				.sort();
 
 			return { groups: groups, ifaces: ifaces };
+		}).then(function(res) {
+			// LAN 接口候选：没有 br-lan 的机型（只有 eth0/eth1）必须能改，
+			// 所以把系统里真实存在的接口列出来，别让用户猜。
+			return fs.read('/proc/net/dev').then(function(txt) {
+				var cands = String(txt || '').split('\n').slice(2).map(function(l) {
+					return l.trim().split(':')[0];
+				}).filter(function(n) { return n && n !== 'lo' && n !== 'dae0'; });
+				res.netdevs = cands;
+				return res;
+			}).catch(function() { res.netdevs = []; return res; });
 		});
 	},
 
@@ -106,6 +116,11 @@ return view.extend({
 			_('承载局域网转发流量的接口。留空则只代理路由器本机流量。'));
 		o.placeholder = 'br-lan';
 		o.rmempty = true;
+		// 有些机型没有 br-lan 网桥，只有 eth0/eth1 这种裸网口。
+		// 把本机实际存在的接口列出来，省得对着空白框猜。
+		o.description = (data.netdevs && data.netdevs.length)
+			? _('本机现有接口：') + data.netdevs.join('、') + _('。填错了 honk 会在启动日志里报找不到接口。')
+			: _('留空则只代理路由器本机流量。');
 
 		o = ss.option(form.Value, 'wan_interface', _('WAN 接口'),
 			_('承载路由器本机流量的接口。auto 表示跟随 IPv4 默认路由。'));
