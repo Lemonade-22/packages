@@ -1097,45 +1097,63 @@ return view.extend({
 			return box;
 		};
 
-		/* 仪表盘：检测 honk 自带面板到底能不能用，而不是写死一句说明 */
+		/* 仪表盘：装了什么就显示什么入口。
+		   doona 挂在 native API 端口，zashboard 一类挂 Clash API 端口。 */
 		o = s.taboption('status', form.DummyValue, '_dash', _('仪表盘'));
 		o.rawhtml = true;
 		o.cfgvalue = function() {
-			var box = E('div', { 'class': 'cbi-value-description' }, _('正在检测…'));
+			var box = E('div', { 'style': 'line-height:1.8' }, _('正在检测…'));
+
+			function line(color, label, href, extra) {
+				var parts = [ E('span', { 'style': 'color:' + color + ';font-weight:600' }, label) ];
+				if (href)
+					parts.push('  ', E('a', {
+						'href': href, 'target': '_blank', 'rel': 'noreferrer noopener',
+						'style': 'word-break:break-all'
+					}, href));
+				if (extra)
+					parts.push('  ', extra);
+				return E('p', { 'style': 'margin:0' }, parts);
+			}
 
 			function check() {
 				return fs.exec('/usr/share/honk/dash-status.sh').then(function(res) {
 					var parts = String(res.stdout || '').trim().split('|');
-					var state = parts[0] || '';
-					var detail = (parts[1] || '').trim();
+					var kind = parts[0] || '';
+					var url = (parts[1] || '').trim();
 
 					box.innerHTML = '';
-					if (state === 'ok') {
-						box.appendChild(E('p', {}, [
-							E('span', { 'style': 'color:#19be6b;font-weight:600' }, _('doona 已可用')),
-							'  ',
-							E('a', {
-								'href': detail, 'target': '_blank', 'rel': 'noreferrer noopener',
-								'style': 'word-break:break-all'
-							}, detail)
-						]));
-					} else if (state === 'nobuiltin') {
-						box.appendChild(E('p', {}, [
-							E('span', { 'style': 'color:#ff9900;font-weight:600' }, _('doona 未内置')),
-							'  ',
-							_('当前 honk-core 不含 native-ui 功能：根路径返回 HTTP ') + detail +
-							_(' 且没有跳转地址。要界面请换带 native-ui 的构建，或把 ui 指向一个含 index.html 的本地目录。')
-						]));
-					} else {
-						box.appendChild(E('p', {}, [
-							E('span', { 'style': 'color:gray;font-weight:600' }, _('无法检测')),
-							'  ',
-							_('honk-core 没在运行，或者 native API 没开。')
-						]));
+					switch (kind) {
+					case 'doona':
+						box.appendChild(line('#19be6b', _('doona 已安装'), url));
+						break;
+					case 'zashboard':
+						box.appendChild(line('#19be6b', _('zashboard 已安装'), url));
+						break;
+					case 'metacubexd':
+						box.appendChild(line('#19be6b', _('metacubexd 已安装'), url));
+						break;
+					case 'yacd':
+						box.appendChild(line('#19be6b', _('yacd 已安装'), url));
+						break;
+					case 'doona-installed':
+						box.appendChild(line('#ff9900', _('doona 已安装'),
+							null, _('但 honk 没在运行，面板打不开。')));
+						break;
+					case 'nopanel':
+						box.appendChild(line('gray', _('没有 Web 面板'),
+							null, _('装了 doona 或 zashboard 后这里会出现入口。')));
+						break;
+					default:
+						box.appendChild(line('gray', _('无法检测'),
+							null, _('honk-core 没在运行，或者 native API 没开。')));
 					}
 
-					box.appendChild(E('p', {}, _('zashboard：基于 Clash API 的第三方界面，' +
-						'需要 honk-core 带 clash-api。')));
+					// 两个面板都装的情况很少，但装了就把另一个也列出来
+					if (kind === 'doona' || kind === 'doona-installed') {
+						box.appendChild(E('p', { 'style': 'margin:4px 0 0;color:#888' },
+							_('zashboard：基于 Clash API 的第三方面板，需另装且 honk-core 带 clash-api。')));
+					}
 				}).catch(function(e) {
 					box.textContent = String(e);
 				});
