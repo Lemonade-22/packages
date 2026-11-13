@@ -145,7 +145,11 @@ mkdir -p "$(dirname "$OUT")"
     # 只放行"局域网访问路由器本体"，不能写成 sip(<lan>) -> direct：
     # 那样连 LAN 设备去外网的流量也一起直连，代理形同虚设。
     # 目的地址限定成路由器自己的 LAN IP，入站的 SSH/LuCI 才不会被劫走。
-    echo "    sip(${net:-$lan_cidr}) && dip($lan_ip) -> direct"
+    #
+    # 必须用 direct(must)：普通 direct 只是选直连出口，DNS 仍归 honk 接管，
+    # 管理连接照样会被卷进去。must 才会立即终结规则搜索、跳过 DNS 控制器。
+    # 排除 53 是有意的——那一路继续走 honk 做透明 DNS。
+    echo "    sip(${net:-$lan_cidr}) && dip($lan_ip) && !dport(53) -> direct(must)"
   fi
   # 路由器自己发起的 DNS 查询不能被绕回 honk，否则成环
   echo "    pname(dnsmasq) -> direct"
