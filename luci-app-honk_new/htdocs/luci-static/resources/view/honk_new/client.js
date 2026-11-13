@@ -563,6 +563,72 @@ return view.extend({
 		};
 
 
+		/* 自定义路由规则：整段替换 routing { } */
+		/* 自定义路由规则 */
+		o = s.taboption('diversion', form.Flag, 'custom_rules_enabled', _('启用自定义规则'),
+			_('这会整段替换路由规则。开启后，多SSID分流、访问控制、分流控制、IPv6 模式、' +
+			  '端口白名单和 QUIC 设置全部失效；兜底那条 fallback 也要你自己写。'));
+		o.rmempty = false;
+
+		o = s.taboption('diversion', form.TextValue, '_custom_rules', _('路由规则'),
+			_('写 routing { } 的内部内容，dae 语法，一行一条规则。' +
+			  '开关关闭时这里显示的是当前实际生效的规则，只读；开启后你写的内容会整段替换它们。' +
+			  '内容存在 /etc/honk_new/custom.rules 里，不走 UCI。'));
+		o.rows = 22;
+		o.monospace = true;
+		// 不隐藏：关掉开关时也要看得见现在跑的是什么，只是不能改
+		o.cfgvalue = function() {
+			return fs.read('/etc/honk_new/custom.rules').catch(function() { return ''; }).then(function(txt) {
+				if ((txt || '').trim().length)
+					return txt;
+
+				// 没写过自定义规则，就把生成出来的 routing 块摊开给人看。
+				// 这些是各路设置合出来的结果，不是用户输入的，所以只读展示。
+				return fs.read('/etc/honk_new/config.dae').then(function(dae) {
+					var m = String(dae || '').match(/^routing[ \t]*\{([\s\S]*?)^\}/m);
+					if (!m) return '';
+					return m[1].replace(/^[ \t]{4}/gm, '').replace(/^\n+/, '').replace(/[ \t]+$/, '');
+				}).catch(function() { return ''; });
+			});
+		};
+		o.renderWidget = function() {
+			var w = form.TextValue.prototype.renderWidget.apply(this, arguments);
+			var ta = w.querySelector('textarea');
+			if (!ta) return w;
+
+			var box = ta;
+			while (box && box.tagName !== 'FORM') box = box.parentNode;
+			var sync = function() {
+				var on = uci.get('honk_new', 'config', 'custom_rules_enabled') === '1';
+				ta.readOnly = !on;
+				ta.style.background = on ? '' : '#f2f2f2';
+				ta.style.color = on ? '' : '#666';
+			};
+			sync();
+			// 开关就在同一张表单里，切一下 UCI 的待提交值立刻变，这里跟着同步
+			if (box && !box.__honkCustomBound) {
+				box.__honkCustomBound = true;
+				box.addEventListener('change', function(ev) {
+					if (ev.target && ev.target.getAttribute('name') === 'custom_rules_enabled')
+						sync();
+				});
+			}
+			return w;
+		};
+		o.write = function(section_id, value) {
+			return fs.write('/etc/honk_new/custom.rules', String(value || ''));
+		};
+		o.remove = function() {
+			return fs.write('/etc/honk_new/custom.rules', '');
+		};
+		o.placeholder = [
+			'sip(188.181.1.0/24) -> proxy',
+			'sip(188.181.2.0/24) -> proxy',
+			'domain(geosite: geolocation-cn) -> direct',
+			'dip(geoip: cn) -> direct',
+			'l4proto(udp) && dport(443) -> block',
+			'fallback: proxy'
+		].join('\n');
 		return m.render();
 	}
 });
