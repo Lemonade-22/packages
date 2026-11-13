@@ -272,7 +272,28 @@ return view.extend({
 		o.default = '86400';
 		o.description = _('机场换节点不会等一天。更新完要点「保存并应用」才会真正重载。');
 
-		o = subsSec.option(form.Value, 'user_agent', _('订阅 User-Agent'));
+		// 机场按 UA 返回不同格式。留空就用 honk 自己的 honk/<版本>；
+		// 兼容面最广的是 clash.meta —— 出 Clash YAML 的机场基本都认它。
+		o = subsSec.option(form.ListValue, 'user_agent', _('订阅 User-Agent'));
+		o.value('', _('默认（honk/<版本>）'));
+		o.value('clash.meta', 'clash.meta');
+		o.value('mihomo', 'mihomo');
+		o.value('clash', 'clash');
+		o.value('sing-box', 'sing-box');
+		o.value('v2rayN', 'v2rayN');
+		o.value('v2rayNG', 'v2rayNG');
+		o.value('Shadowrocket', 'Shadowrocket');
+		o.value('QuantumultX', 'Quantumult X');
+		o.value('Surge', 'Surge');
+		o.value('Stash', 'Stash');
+		o.value('custom', _('— 自定义 —'));
+		o.rmempty = true;
+		o.description = _('机场按 UA 决定返回哪种格式。不确定就用默认，或者选 clash.meta —— ' +
+			'支持 Clash YAML 的机场都认它。');
+
+		o = subsSec.option(form.Value, 'user_agent_custom', _('自定义 User-Agent'));
+		o.depends('user_agent', 'custom');
+		o.placeholder = 'clash.meta';
 		o.rmempty = true;
 
 		o = s.taboption('subs', form.DummyValue, '_providers', _('已生效订阅'));

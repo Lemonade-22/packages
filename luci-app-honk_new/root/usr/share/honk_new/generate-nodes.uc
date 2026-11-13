@@ -39,7 +39,9 @@ for (let s in sections('subscription')) {
 	if (route !== 'direct' && route !== 'routing' && !group_names[route])
 		die('Unknown subscription outbound\n');
 	printf('    %s: %s {\n        interval: %ss\n        cache: true\n        route: %s\n', quote(tag), quote(s.url), interval, route);
-	if (s.user_agent) printf('        ua: %s\n', quote(s.user_agent));
+	// user_agent 是预设下拉，选 custom 时真正的值在 user_agent_custom
+	let ua = (s.user_agent === 'custom') ? (s.user_agent_custom || '') : (s.user_agent || '');
+	if (ua) printf('        ua: %s\n', quote(ua));
 	print('    }\n');
 }
 print('}\nnode {\n');

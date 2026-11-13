@@ -73,6 +73,9 @@ config subscription 'example_sub'
 	option name 'sample'
 	option url ''
 	option tag 'sub'
+	# 空 = 用内核默认 honk/<版本>；下拉选「自定义」时值取下面这一项
+	option user_agent ''
+	option user_agent_custom ''
 
 # 访问控制：按源/目标地址决定走代理还是直连
 config control 'control'
