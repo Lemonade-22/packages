@@ -90,6 +90,24 @@ function renderConnection() {
 }
 
 
+/*
+ * 让 DummyValue 的内容占满整行。
+ * LuCI 的 .cbi-value 是标签 30% / 内容 70% 的两列布局，表格塞在右列会明显
+ * 缩进，跟上面的 GridSection 表头对不齐。这里藏掉标签列、内容列拉满。
+ */
+function fullRow(node) {
+	var p = node;
+	while (p && !(p.classList && p.classList.contains('cbi-value')))
+		p = p.parentNode;
+	if (p) {
+		var t = p.querySelector('.cbi-value-title');
+		if (t) t.style.display = 'none';
+		var f = p.querySelector('.cbi-value-field');
+		if (f) { f.style.marginLeft = '0'; f.style.width = '100%'; }
+	}
+	return node;
+}
+
 /* 已生效的原生订阅。honk 自己解析订阅，这里只展示内核的实际状态，
    不重复前端那套下载/解析逻辑。 */
 function renderProviders() {
@@ -155,7 +173,7 @@ function renderProviders() {
 
 	check();
 	poll.add(check, 20);
-	return box;
+	return fullRow(box);
 }
 
 /* 分组与当前选择。GET /groups 只给摘要，成员要单独读 /groups/{id}。 */
@@ -263,7 +281,7 @@ function renderPicking() {
 
 	check();
 	poll.add(check, 30);
-	return box;
+	return fullRow(box);
 }
 
 /* 让内核重新加载已保存的配置。走原生 API，拿到 operation 才代表真的完成。 */

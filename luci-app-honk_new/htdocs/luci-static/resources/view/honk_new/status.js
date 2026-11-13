@@ -13,6 +13,20 @@
  * 只读页：没有任何可保存的配置，只有连接测试、资源更新和日志。
  * 照 HomeProxy 的做法垂直堆叠独立卡片，每张卡片自带动作按钮。
  */
+/* 让 DummyValue 的内容占满整行，否则表格被 30% 宽的标签列挤到右边 */
+function fullRow(node) {
+	var p = node;
+	while (p && !(p.classList && p.classList.contains('cbi-value')))
+		p = p.parentNode;
+	if (p) {
+		var t = p.querySelector('.cbi-value-title');
+		if (t) t.style.display = 'none';
+		var f = p.querySelector('.cbi-value-field');
+		if (f) { f.style.marginLeft = '0'; f.style.width = '100%'; }
+	}
+	return node;
+}
+
 return view.extend({
 	load: function() {
 		return Promise.all([

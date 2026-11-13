@@ -112,15 +112,18 @@ return view.extend({
 		var sv = s.taboption('routing', form.SectionValue, '_infra', form.NamedSection, 'infra', 'honk_new');
 		var ss = sv.subsection;
 
-		o = ss.option(form.Value, 'lan_interface', _('LAN 接口'),
+		// 直接列本机实际存在的接口，免得用户对着空白框猜。
+		// 有些机型没有 br-lan 网桥，只有 eth0/eth1 这种裸网口，所以这一项必须能改。
+		o = ss.option(form.ListValue, 'lan_interface', _('LAN 接口'),
 			_('承载局域网转发流量的接口。留空则只代理路由器本机流量。'));
-		o.placeholder = 'br-lan';
+		o.value('', _('（不设置，只代理本机流量）'));
+		(data.netdevs || []).forEach(function(n) { o.value(n, n); });
+		// 当前值可能指向一个已经消失的接口（换了网卡配置、拔了 USB 网卡），
+		// 不在列表里就补进去，否则下拉会显示空白、用户以为配置丢了。
+		var curLan = uci.get('honk_new', 'infra', 'lan_interface');
+		if (curLan && (data.netdevs || []).indexOf(curLan) < 0)
+			o.value(curLan, curLan + _('（当前值，接口不存在）'));
 		o.rmempty = true;
-		// 有些机型没有 br-lan 网桥，只有 eth0/eth1 这种裸网口。
-		// 把本机实际存在的接口列出来，省得对着空白框猜。
-		o.description = (data.netdevs && data.netdevs.length)
-			? _('本机现有接口：') + data.netdevs.join('、') + _('。填错了 honk 会在启动日志里报找不到接口。')
-			: _('留空则只代理路由器本机流量。');
 
 		o = ss.option(form.Value, 'wan_interface', _('WAN 接口'),
 			_('承载路由器本机流量的接口。auto 表示跟随 IPv4 默认路由。'));

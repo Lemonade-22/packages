@@ -283,6 +283,24 @@ return view.extend({
 	}
 });
 
+/*
+ * 让一个 DummyValue 的内容占满整行。
+ * LuCI 的 .cbi-value 是两列布局（标签 30% / 内容 70%），表格塞在右列里会
+ * 明显缩进，跟上面 GridSection 的表头对不齐。这里把标签列藏掉、内容列拉满。
+ */
+function fullRow(node) {
+	var p = node;
+	while (p && !(p.classList && p.classList.contains('cbi-value')))
+		p = p.parentNode;
+	if (p) {
+		var t = p.querySelector('.cbi-value-title');
+		if (t) t.style.display = 'none';
+		var f = p.querySelector('.cbi-value-field');
+		if (f) { f.style.marginLeft = '0'; f.style.width = '100%'; }
+	}
+	return node;
+}
+
 /* 当前生效的节点表：名称 / 延迟 / 测试 / 类型 / 地址 / 端口，照 HomeProxy 的列 */
 function renderRuntimeNodes(data) {
 	var rows = (data.runtime || []).filter(function(n) { return n.protocol !== 'direct' && n.protocol !== 'block'; });
@@ -345,5 +363,5 @@ function renderRuntimeNodes(data) {
 		]));
 	});
 
-	return E('div', { 'style': 'max-height:32em;overflow:auto' }, table);
+	return fullRow(E('div', { 'style': 'max-height:32em;overflow:auto' }, table));
 }
