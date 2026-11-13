@@ -202,10 +202,20 @@ return view.extend({
 		o.default = 'urltest';
 		o.rmempty = false;
 
+		// 成员要包含「当前生效的节点」，也就是内核实际解析出来的那些。
+		// 只列手动节点是不够的：订阅节点的名字由内核在运行时决定，UCI 里没有，
+		// 用户全是订阅节点时这个下拉会是空的，根本没法配组。
 		o = groupsSec.option(form.DynamicList, 'members', _('成员'));
-		(data.manual || []).forEach(function(n) { o.value(n.name, n.name); });
+		(data.runtime || []).forEach(function(rt) {
+			if (rt.protocol === 'direct' || rt.protocol === 'block') return;
+			if (rt.name) o.value(rt.name, rt.name);
+		});
+		(data.manual || []).forEach(function(mn) {
+			if (mn.name) o.value(mn.name, mn.name);
+		});
 		(data.groups || []).forEach(function(g) { o.value(g, _('[组] ') + g); });
 		o.rmempty = true;
+		o.description = _('选节点或别的组。留空表示这个组暂时不含任何成员（不会自动包含全部节点）。');
 
 		o = groupsSec.option(form.DynamicList, 'providers', _('订阅成员'));
 		uci.sections('honk_new', 'subscription').filter(function(x) { return x.enabled === '1'; }).forEach(function(x) {

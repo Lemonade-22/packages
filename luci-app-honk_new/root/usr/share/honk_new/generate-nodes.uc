@@ -60,14 +60,23 @@ for (let g in groups) {
 	const policy = g.policy || 'urltest';
 	if (!(policy in ['selector', 'urltest', 'score', 'loadbalance', 'fallback'])) die('Unknown group policy\n');
 	printf('    %s {\n', g.name);
+	let emitted = 0;
 	for (let member in list(g.members)) {
 		if (member === g.name) die('A group cannot contain itself\n');
 		printf('        filter: %s(%s)\n', group_names[member] ? 'group' : 'name', quote(member));
+		emitted++;
 	}
 	for (let tag in list(g.providers)) {
 		if (!providers[tag]) die('Group refers to a disabled or missing subscription\n');
 		printf('        filter: subtag(%s)\n', quote(tag));
+		emitted++;
 	}
+	// honk 对一个没有任何 filter 的组采用「包含全部节点」的语义。
+	// 那不是我们要的默认行为：新建一个组、还没选成员，它就已经把整份订阅
+	// 都吞进去了，用户在界面上以为自己只建了个空壳。
+	// 没有显式成员时给一个永不匹配的 filter，让空组就是空组。
+	if (emitted === 0)
+		print('        filter: name(\'__honk_no_members__\')\n');
 	printf('        policy: %s\n', policy);
 	if (g.check_url) printf('        check_url: %s\n', quote(g.check_url));
 	if (g.tolerance) {
