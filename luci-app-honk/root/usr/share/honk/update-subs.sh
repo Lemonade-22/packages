@@ -21,6 +21,12 @@ b64decode() {
 	openssl base64 -d -A < "$1" 2>/dev/null
 }
 
+# 订阅里的节点名是 percent-encoded 的 UTF-8（%E5%89%A9 -> 剩）。
+# busybox 的 awk 没有 strtonum，所以用 sed 转成 \xNN 再交给 printf %b。
+urldecode() {
+	printf '%b' "$(printf '%s' "$1" | sed 's/%\([0-9A-Fa-f][0-9A-Fa-f]\)/\\x\1/g')"
+}
+
 total=0
 for s in $sections; do
 	[ "$(uci -q get "$CONF.$s.enabled")" = "1" ] || { echo "skip $s: disabled"; continue; }
@@ -28,7 +34,9 @@ for s in $sections; do
 	url="$(uci -q get "$CONF.$s.url")"
 	tag="$(uci -q get "$CONF.$s.tag")"
 	[ -n "$url" ] || { echo "skip $s: no url"; continue; }
-	[ -n "$tag" ] || tag="$s"
+	# $s 是 @subscription[0] 这种 UCI 引用，不能当显示名用
+	[ -n "$tag" ] || tag="$(uci -q get "$CONF.$s.name")"
+	[ -n "$tag" ] || tag="$(printf %s "$s" | tr -cd "a-zA-Z0-9")"
 
 	tmp="/tmp/honk-sub.$$"
 	links="$tmp.links"
@@ -73,11 +81,27 @@ for s in $sections; do
 		fi
 	fi
 
+	# 节点名现在可能是订阅里自带的中文名，不能再按名字前缀匹配，
+	# 按 section 名的订阅前缀删，才不会漏也不会误删别的订阅。
+	safe_s="$(printf %s "$s" | tr -cd "a-zA-Z0-9")"
+	# 订阅商常在前面塞几条信息占位（剩余流量 / 套餐到期…），它们的连接参数
+	# 跟真节点完全一样。按 # 之前的部分去重，只留一条；名字优先取非信息那版。
+	if [ -s "$links" ]; then
+		awk -F'#' '
+		{
+			key = $1
+			nm  = (NF > 1) ? $2 : ""
+			if (!(key in chosen)) { chosen[key] = $0; order[++n] = key }
+			else if (nm !~ /流量|到期|重置|剩余|套餐|过期/) chosen[key] = $0
+		}
+		END { for (i = 1; i <= n; i++) print chosen[order[i]] }
+		' "$links" > "$links.dedup" && mv "$links.dedup" "$links"
+	fi
+
 	removed=0
 	for n in $(uci show "$CONF" 2>/dev/null | sed -n "s/^$CONF\.\([^.=]*\)=node$/\1/p"); do
-		nm="$(uci -q get "$CONF.$n.name")"
-		case "$nm" in
-			"$tag"/*) uci -q delete "$CONF.$n"; removed=$((removed + 1)) ;;
+		case "$n" in
+			"sub_${safe_s}_"*) uci -q delete "$CONF.$n"; removed=$((removed + 1)) ;;
 		esac
 	done
 	[ "$removed" -gt 0 ] && echo "  removed $removed old nodes"
@@ -87,12 +111,30 @@ for s in $sections; do
 		[ -n "$link" ] || continue
 		idx=$((idx + 1))
 		# $s 是 @subscription[0] 这种 UCI 引用，直接拼进 section 名会被拒（Invalid argument）
-		safe_s="$(printf %s "$s" | tr -cd "a-zA-Z0-9")"
 		sid="sub_${safe_s}_${idx}"
+
+		# 节点名优先用分享链接自带的备注，没有才退回 订阅名/序号。
+		# vmess 的名字藏在 base64 里的 ps 字段，还得过一遍 JSON 转义，交给 ucode。
+		case "$link" in
+			vmess://*)
+				nm=""
+				if command -v ucode >/dev/null 2>&1; then
+					nm="$(ucode -e 'let r = ""; try { let d = json(b64dec(ARGV[0])); r = d.ps ?? ""; } catch (e) { r = ""; } print(r);' \
+						"${link#vmess://}" 2>/dev/null | tr -d '\r\n')"
+				fi
+				;;
+			*"#"*)
+				nm="${link##*#}"
+				nm="$(urldecode "$nm" | tr -d '\r\n')"
+				;;
+			*) nm="" ;;
+		esac
+		[ -n "$nm" ] || nm="${tag}/${idx}"
+
 		uci -q delete "$CONF.$sid"
 		uci set "$CONF.$sid=node"
 		uci -q set "$CONF.$sid.enabled=1"
-		uci -q set "$CONF.$sid.name=${tag}/${idx}"
+		uci -q set "$CONF.$sid.name=$nm"
 		uci -q set "$CONF.$sid.uri=$link"
 	done < "$links"
 
