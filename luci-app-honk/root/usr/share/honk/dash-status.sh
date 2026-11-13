@@ -30,10 +30,12 @@ if [ -f "$DOONA_DIR/index.html" ]; then
 				exit 0
 				;;
 		esac
-		echo "doona-installed|"
+		# 面板文件在，但 honk 没跑：照样给入口，点开是打不开的，
+		# 前端会显示成"已安装，未运行"，链接灰着也总比没有强
+		echo "doona-installed|http://${LANIP}:${API_PORT}/ui/"
 		exit 0
 	fi
-	echo "doona-installed|"
+	echo "doona-installed|http://${LANIP}:${API_PORT}/ui/"
 	exit 0
 fi
 

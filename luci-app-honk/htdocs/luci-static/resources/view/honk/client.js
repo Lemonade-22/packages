@@ -1137,8 +1137,8 @@ return view.extend({
 						box.appendChild(line('#19be6b', _('yacd 已安装'), url));
 						break;
 					case 'doona-installed':
-						box.appendChild(line('#ff9900', _('doona 已安装'),
-							null, _('但 honk 没在运行，面板打不开。')));
+						box.appendChild(line('#ff9900', _('doona 已安装'), url,
+							_('honk 没在运行，点开是空的。')));
 						break;
 					case 'nopanel':
 						box.appendChild(line('gray', _('没有 Web 面板'),
