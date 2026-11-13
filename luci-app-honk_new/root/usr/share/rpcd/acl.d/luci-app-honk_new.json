@@ -43,6 +43,9 @@
 				],
 				"luci.honk_new": [
 					"connection_check"
+				],
+				"network.device": [
+					"status"
 				]
 			},
 			"uci": [

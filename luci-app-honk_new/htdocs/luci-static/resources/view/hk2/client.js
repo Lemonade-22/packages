@@ -31,13 +31,17 @@ return view.extend({
 
 			return { groups: groups, ifaces: ifaces };
 		}).then(function(res) {
-			// LAN 接口候选：没有 br-lan 的机型（只有 eth0/eth1）必须能改，
-			// 所以把系统里真实存在的接口列出来，别让用户猜。
-			return fs.read('/proc/net/dev').then(function(txt) {
-				var cands = String(txt || '').split('\n').slice(2).map(function(l) {
-					return l.trim().split(':')[0];
-				}).filter(function(n) { return n && n !== 'lo' && n !== 'dae0'; });
-				res.netdevs = cands;
+			// LAN 接口候选直接取 ubus 的 network.device，「网络 → 设备」页用的同一个源。
+			// 有的机型没有 br-lan 网桥、只有 eth0/eth1，这一项必须能改。
+			return hk2.deviceStatus().then(function(devs) {
+				res.netdevs = Object.keys(devs || {})
+					.filter(function(n) { return n !== 'lo' && n !== 'dae0'; })
+					.map(function(n) {
+						var d = devs[n] || {};
+						var kind = d.devtype || d.type || '';
+						return { name: n, label: kind ? n + '  ·  ' + kind : n };
+					})
+					.sort(function(a, b) { return a.name.localeCompare(b.name); });
 				return res;
 			}).catch(function() { res.netdevs = []; return res; });
 		});
@@ -117,11 +121,15 @@ return view.extend({
 		o = ss.option(form.ListValue, 'lan_interface', _('LAN 接口'),
 			_('承载局域网转发流量的接口。留空则只代理路由器本机流量。'));
 		o.value('', _('（不设置，只代理本机流量）'));
-		(data.netdevs || []).forEach(function(n) { o.value(n, n); });
+		var names = [];
+		(data.netdevs || []).forEach(function(d) {
+			names.push(d.name);
+			o.value(d.name, d.label);
+		});
 		// 当前值可能指向一个已经消失的接口（换了网卡配置、拔了 USB 网卡），
 		// 不在列表里就补进去，否则下拉会显示空白、用户以为配置丢了。
 		var curLan = uci.get('honk_new', 'infra', 'lan_interface');
-		if (curLan && (data.netdevs || []).indexOf(curLan) < 0)
+		if (curLan && names.indexOf(curLan) < 0)
 			o.value(curLan, curLan + _('（当前值，接口不存在）'));
 		o.rmempty = true;
 

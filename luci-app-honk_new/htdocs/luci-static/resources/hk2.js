@@ -5,6 +5,11 @@
 'require rpc';
 'require ui';
 
+// 网络设备的权威来源就是 ubus 的 network.device，LuCI 的「网络 → 设备」页
+// 用的也是它。fs.read('/proc/net/dev') 走不通——ACL 不给 /proc 下的路径，
+// 而且那儿只有名字，没有「是不是网桥」这种信息。
+var deviceStatus = rpc.declare({ object: 'network.device', method: 'status', expect: { '': {} } });
+
 var connectionCheck = rpc.declare({ object: 'luci.honk_new', method: 'connection_check', params: ['site'], expect: { '': {} } });
 
 /* 只读动作走 honk-read.sh：ACL 把它放在 read 权限里，未登录或只读身份
@@ -410,7 +415,7 @@ function renderApplyStatus() {
 	return box;
 }
 
-return baseclass.extend({ api: api, nodes: function() { return page('nodes'); }, providers: function() { return page('providers'); },
+return baseclass.extend({ api: api, deviceStatus: function() { return deviceStatus(); }, nodes: function() { return page('nodes'); }, providers: function() { return page('providers'); },
 	waitOperation: waitOperation, health: health, renderConnection: renderConnection,
 	renderProviders: renderProviders, renderPicking: renderPicking, reload: reload, renderApplyStatus: renderApplyStatus,
 	mountStatusBanner: mountStatusBanner });
