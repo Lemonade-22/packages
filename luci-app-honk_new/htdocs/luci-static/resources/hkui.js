@@ -161,7 +161,10 @@ function renderProviders() {
 	var box = E('div', { style: 'line-height:1.8' }, _('正在读取已生效订阅…'));
 
 	function check() {
-		return page('providers').then(function(list) {
+		return page('providers').then(function(all) {
+			// inline 是 honk 的虚拟 provider，装的是手动节点，不是订阅。
+			// 文档明确它不可刷新也不可删除。列在这里只会让人以为订了却没节点。
+			var list = (all || []).filter(function(p) { return p.kind !== 'inline'; });
 			box.innerHTML = '';
 
 			if (!list.length) {
@@ -177,9 +180,18 @@ function renderProviders() {
 					})));
 
 			list.forEach(function(p) {
-				var state = E('strong', {}, p.status || _('未知'));
-				if (p.status === 'healthy' || p.status === 'ok')
+				var STATE_TEXT = {
+					ok: _('正常'),
+					stale: _('已过期'),
+					failed: _('拉取失败'),
+					error: _('出错'),
+					refreshing: _('更新中')
+				};
+				var state = E('strong', {}, STATE_TEXT[p.status] || p.status || _('未知'));
+				if (p.status === 'ok')
 					state.style.color = 'green';
+				else if (p.status === 'stale' || p.status === 'refreshing')
+					state.style.color = '#ff9900';
 				else if (p.status === 'failed' || p.status === 'error')
 					state.style.color = 'red';
 
