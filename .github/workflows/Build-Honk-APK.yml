@@ -183,7 +183,7 @@ jobs:
           while IFS= read -r f; do
             cp -v "$f" "$out/"
             found=$((found + 1))
-          done < <(find "$SDK_ROOT/bin" \( -name 'luci-app-honk*.apk' -o -name 'luci-app-honk*.ipk' \) 2>/dev/null)
+          done < <(find "$SDK_ROOT/bin" \( -name 'luci-app-honk-[0-9]*.apk' -o -name 'luci-app-honk_[0-9]*.ipk' \) 2>/dev/null)
           (( found > 0 )) || { echo "::error::没有找到 luci-app-honk 的包"; exit 1; }
           cd "$out" && sha256sum -- * > SHA256SUMS
           ls -l "$out"
@@ -239,15 +239,9 @@ jobs:
             echo '平台：${{ matrix.platform_name }}'
             echo '架构：${{ matrix.architecture }}'
             echo
-            echo '**本包不含 honk-core**，需从 daeuniverse 的 apk 源单独安装：'
-            echo
-            echo '\`\`\`sh'
-            echo 'wget -O /etc/apk/keys/daeuniverse.pem https://openwrt.daeuniverse.org/public-key.pem'
-            echo '. /etc/openwrt_release'
-            echo 'FEED="https://openwrt.daeuniverse.org/$(echo $DISTRIB_RELEASE | cut -d. -f1-2)"'
-            echo 'echo "$FEED/packages.adb" >> /etc/apk/repositories.d/daeuniverse.list'
-            echo 'apk update && apk add honk vmlinux-btf-builtin'
-            echo '\`\`\`'
+            echo '本包包含构建时下载的 honk-core v0.1.0-beta.6。'
+            echo '本次源码提交：${{ github.sha }}'
+            echo '请下载 luci-app-honk 包；旧的 honk-new 发布页保留历史版本。'
           } > "$notes"
 
           if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then

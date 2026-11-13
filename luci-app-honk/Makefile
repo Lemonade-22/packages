@@ -6,7 +6,7 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=luci-app-honk
 PKG_VERSION:=20261113
-PKG_RELEASE:=4
+PKG_RELEASE:=5
 
 LUCI_TITLE:=LuCI for honk - eBPF transparent proxy (新界面)
 # honk-core 不在标准 feed 里，装完本插件后自行安装（daeuniverse 源或自编），
