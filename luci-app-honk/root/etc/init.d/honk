@@ -104,7 +104,17 @@ stop_service() {
 }
 
 reload_service() {
-	is_enabled || return 0
+	# 关掉开关不能只是"什么都不做"：已经在跑的实例得停掉，
+	# 开机自启的软链也得摘掉，否则关了开关重启它照样起来。
+	if ! is_enabled; then
+		stop
+		disable
+		return 0
+	fi
+
+	# 开着的状态下补回自启软链，避免之前 disable 过之后再也起不来
+	enable
+
 	generate || return 1
 	local bin
 	bin="$(honk_bin)" || return 1
