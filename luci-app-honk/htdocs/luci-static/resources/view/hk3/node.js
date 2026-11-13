@@ -391,6 +391,7 @@ return view.extend({
 
 			// m.render() 只生成表单本身，主题的 .cbi-page-actions 是在这之后
 			// 才挂上去的，所以这里立刻找是找不到的，得等一帧。
+			window.setTimeout(function() { mountTestAll(el); }, 0);
 			return el;
 		});
 	}
@@ -458,8 +459,63 @@ function bindSort(table) {
 
 /*
  * 订阅 tab 的标题：优先订阅名，其次 URL 主机名，最后截断链接本身。
- * 机场经常不起名，那就用主机名区分——dasho.pqjc.site 比"订阅 2"有用得多。
+ * 机场经常不起名，那就用主机名区分——sub.example.com 比"订阅 2"有用得多。
  */
+/*
+ * 页面底部操作区里的「测试所有节点」，测当前显示的那个列表 ——
+ * 在「手动节点」下就测手动的，在某个订阅下就测那个订阅的。
+ *
+ * 串行不并发：几十个节点一起探会把 conntrack 和出口打满，全变超时。
+ * 靠每行按钮自己挂的 runProbe() 串起来，不轮询文字。
+ */
+function mountTestAll(el) {
+	// .cbi-page-actions 是主题放在 map 外面的，不能从 el 往下找
+	var actions = document.querySelector('.cbi-page-actions');
+	if (!actions) {
+		window.setTimeout(function() { mountTestAll(el); }, 200);
+		return;
+	}
+	if (actions.querySelector('.honk-test-all')) return;
+
+	// 固定宽度：进度文字比标题短，不固定的话旁边的按钮会跟着左右跳
+	var btn = E('button', {
+		'class': 'btn cbi-button honk-test-all',
+		'style': 'margin-right:8px;min-width:9.5em;text-align:center;font-variant-numeric:tabular-nums'
+	}, _('测试所有节点'));
+
+	var label = btn.textContent;
+
+	btn.addEventListener('click', function(ev) {
+		ev.preventDefault();
+		if (btn.disabled) return;
+
+		// 只取当前可见的那个列表
+		var panes = Array.prototype.slice.call(el.querySelectorAll('[id^="cbi-honk-config-_nodes_"]'));
+		var pane = panes.filter(function(p) { return p.offsetParent !== null; })[0];
+		if (!pane) return;
+
+		var probes = Array.prototype.slice.call(pane.querySelectorAll('button.honk-probe'));
+		if (!probes.length) return;
+
+		var i = 0;
+		btn.disabled = true;
+		btn.textContent = _('测试中 0/') + probes.length;
+
+		function next() {
+			if (i >= probes.length) {
+				btn.disabled = false;
+				btn.textContent = label;
+				return;
+			}
+			btn.textContent = _('测试中 ') + (++i) + '/' + probes.length;
+			Promise.resolve(probes[i - 1].runProbe()).then(next, next);
+		}
+		next();
+	});
+
+	actions.insertBefore(btn, actions.firstChild);
+}
+
 function subLabel(p, i) {
 	var name = (p.name || '').trim();
 	if (name && name !== 'inline') return name;
@@ -571,17 +627,10 @@ function renderProviderNodes(data, tag) {
 	});
 
 	bindSort(table);
-	var bulk = E('button', { 'class': 'btn cbi-button', click: function(ev) {
-		ev.preventDefault();
-		if (bulk.disabled) return;
-		var buttons = Array.prototype.slice.call(table.querySelectorAll('button.honk-probe'));
-		var index = 0; bulk.disabled = true;
-		function next() {
-			if (index >= buttons.length) { bulk.disabled = false; bulk.textContent = _('测试当前列表'); return; }
-			bulk.textContent = _('测试中 ') + (index + 1) + '/' + buttons.length;
-			Promise.resolve(buttons[index++].runProbe()).then(next, next);
-		}
-		next();
-	} }, _('测试当前列表'));
-	return hk3.fullRow(E('div', {}, [E('p', {}, [bulk, ' ', _('节点数：') + rows.length]), E('div', { 'style': 'width:100%;max-height:32em;overflow:auto;position:relative' }, table)]));
+	// 批量测试按钮不放在这里，改挂在页面底部的操作区（见 mountTestAll），
+	// 跟「保存并应用」「保存」「重置」排在一起。
+	return hk3.fullRow(E('div', {}, [
+		E('p', { 'style': 'margin:0 0 6px;color:#888' }, _('节点数：') + rows.length),
+		E('div', { 'style': 'width:100%;max-height:32em;overflow:auto;position:relative' }, table)
+	]));
 }
