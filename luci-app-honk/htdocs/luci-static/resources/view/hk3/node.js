@@ -203,19 +203,21 @@ return view.extend({
 			// 「应用」= 把这个组设成主分组。honk 没有单一主节点，路由目标是组。
 			var actionBtn = E('button', {
 				'class': 'btn cbi-button cbi-button-action',
-				'style': 'padding:2px 10px;font-size:12px;margin-right:4px;',
-				'click': ui.createHandlerFn(this, function(ev) {
+				'style': 'padding:2px 10px;font-size:12px;margin-right:4px;'
+			}, (data.main === name) ? _('已应用') : _('应用'));
+
+			// E() 传 'click' 在这个 LuCI 版本里不生效，必须 addEventListener
+			actionBtn.addEventListener('click', function(ev) {
 					ev.preventDefault();
 					uci.set('honk', 'config', 'main_group', name);
 					return uci.save().then(function() {
 						ui.addNotification(null, E('p', {}, _('主分组已设为 %s，保存并应用后生效。').format(name)), 'info');
-						actionBtn.textContent = _('已应用');
-						actionBtn.disabled = true;
-					}).catch(function(e) {
-						ui.addNotification(null, E('p', {}, e.message), 'error');
-					});
-				})
-			}, (data.main === name) ? _('已应用') : _('应用'));
+				actionBtn.textContent = _('已应用');
+				actionBtn.disabled = true;
+			}).catch(function(e) {
+				ui.addNotification(null, E('p', {}, e.message), 'error');
+			});
+		});
 
 			var host = td.querySelector('div') || td;
 			host.insertBefore(actionBtn, host.firstChild);
@@ -357,8 +359,10 @@ return view.extend({
 
 			var actionBtn = E('button', {
 				'class': 'btn cbi-button',
-				'style': 'padding:2px 10px;font-size:12px;margin-right:4px;',
-				'click': ui.createHandlerFn(this, function(ev) {
+				'style': 'padding:2px 10px;font-size:12px;margin-right:4px;'
+			}, _('更新'));
+
+			actionBtn.addEventListener('click', function(ev) {
 					ev.preventDefault();
 					if (actionBtn.disabled) return;
 					actionBtn.disabled = true;
@@ -373,12 +377,11 @@ return view.extend({
 						ui.addNotification(null, E('p', {}, _('订阅已更新：') + key), 'info');
 						actionBtn.textContent = _('已更新');
 					}).catch(function(e) {
-						ui.addNotification(null, E('p', {}, _('更新失败：') + e.message), 'error');
+						ui.addNotification(null, E('p', {}, _('更新失败：') + hk3.describeError(e)), 'error');
 						actionBtn.disabled = false;
-						actionBtn.textContent = _('更新');
-					});
-				})
-			}, _('更新'));
+				actionBtn.textContent = _('更新');
+			});
+		});
 
 			var host = td.querySelector('div') || td;
 			host.insertBefore(actionBtn, host.firstChild);
@@ -458,7 +461,7 @@ return view.extend({
 
 			// m.render() 只生成表单本身，主题的 .cbi-page-actions 是在这之后
 			// 才挂上去的，所以这里立刻找是找不到的，得等一帧。
-			window.setTimeout(function() { mountTestAll(el); }, 0);
+			window.setTimeout(function() { mountPageActions(el); }, 0);
 			return el;
 		});
 	}
@@ -535,53 +538,23 @@ function bindSort(table) {
  * 串行不并发：几十个节点一起探会把 conntrack 和出口打满，全变超时。
  * 靠每行按钮自己挂的 runProbe() 串起来，不轮询文字。
  */
-function mountTestAll(el) {
-	// .cbi-page-actions 是主题放在 map 外面的，不能从 el 往下找
+/*
+ * 页面底部操作区里跟 tab 相关的按钮：
+ *   「测试所有节点」只在「节点」页有用，
+ *   「更新所有订阅」只在「订阅」页有用。
+ *
+ * .cbi-page-actions 在 tab 面板外面（主题在 map 之后才挂上去的），
+ * 所以既要从 document 找，也得自己跟着 tab 显隐。
+ */
+function mountPageActions(el) {
 	var actions = document.querySelector('.cbi-page-actions');
 	if (!actions) {
-		window.setTimeout(function() { mountTestAll(el); }, 200);
+		// 主题还没把按钮区挂上，等一轮
+		window.setTimeout(function() { mountPageActions(el); }, 200);
 		return;
 	}
-	if (actions.querySelector('.honk-test-all')) return;
 
-	// 固定宽度：进度文字比标题短，不固定的话旁边的按钮会跟着左右跳
-	var btn = E('button', {
-		'class': 'btn cbi-button honk-test-all',
-		'style': 'margin-right:8px;min-width:9.5em;text-align:center;font-variant-numeric:tabular-nums'
-	}, _('测试所有节点'));
-
-	var label = btn.textContent;
-
-	btn.addEventListener('click', function(ev) {
-		ev.preventDefault();
-		if (btn.disabled) return;
-
-		// 只取当前可见的那个列表
-		var panes = Array.prototype.slice.call(el.querySelectorAll('[id^="cbi-honk-config-_nodes_"]'));
-		var pane = panes.filter(function(p) { return p.offsetParent !== null; })[0];
-		if (!pane) return;
-
-		var probes = Array.prototype.slice.call(pane.querySelectorAll('button.honk-probe'));
-		if (!probes.length) return;
-
-		var i = 0;
-		btn.disabled = true;
-		btn.textContent = _('测试中 0/') + probes.length;
-
-		function next() {
-			if (i >= probes.length) {
-				btn.disabled = false;
-				btn.textContent = label;
-				return;
-			}
-			btn.textContent = _('测试中 ') + (++i) + '/' + probes.length;
-			Promise.resolve(probes[i - 1].runProbe()).then(next, next);
-		}
-		next();
-	});
-
-	// 按钮栏在 tab 外面，不跟着 tab 切换消失。这个按钮只对「节点」页有意义，
-	// 所以盯着顶层 tab 的选中状态，别的页藏起来。
+	// 顶层 tab 是包含「节点」的那个 menu，二级 tab 里没有这两个字
 	var topMenu = Array.prototype.slice.call(el.querySelectorAll('.cbi-tabmenu'))
 		.filter(function(ul) {
 			return Array.prototype.some.call(ul.querySelectorAll('li a'), function(a) {
@@ -589,10 +562,107 @@ function mountTestAll(el) {
 			});
 		})[0];
 
+	function activeTab() {
+		if (!topMenu) return '';
+		var a = topMenu.querySelector('li.cbi-tab a');
+		return a ? a.textContent.trim() : '';
+	}
+
+	/* ---- 测试所有节点 ---- */
+	if (!actions.querySelector('.honk-test-all')) {
+		// 固定宽度：进度文字比标题短，不固定的话旁边按钮会跟着左右跳
+		var testBtn = E('button', {
+			'class': 'btn cbi-button honk-test-all',
+			'style': 'margin-right:8px;min-width:9.5em;text-align:center;font-variant-numeric:tabular-nums'
+		}, _('测试所有节点'));
+
+		var testLabel = testBtn.textContent;
+		testBtn.addEventListener('click', function(ev) {
+			ev.preventDefault();
+			if (testBtn.disabled) return;
+
+			// 只取当前可见的那个列表
+			var panes = Array.prototype.slice.call(el.querySelectorAll('[id^="cbi-honk-config-_nodes_"]'));
+			var pane = panes.filter(function(p) { return p.offsetParent !== null; })[0];
+			if (!pane) return;
+
+			var probes = Array.prototype.slice.call(pane.querySelectorAll('button.honk-probe'));
+			if (!probes.length) return;
+
+			var i = 0;
+			testBtn.disabled = true;
+			testBtn.textContent = _('测试中 0/') + probes.length;
+
+			function next() {
+				if (i >= probes.length) {
+					testBtn.disabled = false;
+					testBtn.textContent = testLabel;
+					return;
+				}
+				testBtn.textContent = _('测试中 ') + (++i) + '/' + probes.length;
+				// 每行按钮自己会探，这里串起来，等它完成再下一个
+				Promise.resolve(probes[i - 1].runProbe()).then(next, next);
+			}
+			next();
+		});
+
+		actions.insertBefore(testBtn, actions.firstChild);
+	}
+
+	/* ---- 更新所有订阅 ---- */
+	if (!actions.querySelector('.honk-update-all')) {
+		var updBtn = E('button', {
+			'class': 'btn cbi-button honk-update-all',
+			'style': 'margin-right:8px;min-width:9.5em;text-align:center;font-variant-numeric:tabular-nums'
+		}, _('更新所有订阅'));
+
+		var updLabel = updBtn.textContent;
+		updBtn.addEventListener('click', function(ev) {
+			ev.preventDefault();
+			if (updBtn.disabled) return;
+			updBtn.disabled = true;
+			updBtn.textContent = _('读取订阅…');
+
+			hk3.providers().then(function(list) {
+				// inline 是手动节点的虚拟 provider，刷新它是无意义的
+				var subs = (list || []).filter(function(p) { return p.kind !== 'inline'; });
+				if (!subs.length) throw new Error(_('内核里还没有任何订阅，先点「保存并应用」'));
+
+				var i = 0;
+				function next() {
+					if (i >= subs.length) {
+						updBtn.disabled = false;
+						updBtn.textContent = updLabel;
+						ui.addNotification(null, E('p', {}, _('订阅已全部更新')), 'info');
+						return;
+					}
+					var p = subs[i++];
+					updBtn.textContent = _('更新中 ') + i + '/' + subs.length;
+					return hk3.api('provider-refresh', p.id).then(hk3.waitOperation).then(next, function(e) {
+						// 一条失败不该拖住后面的
+						ui.addNotification(null, E('p', {}, _('更新失败：') + (p.name || p.id) + ' — ' + hk3.describeError(e)), 'error');
+						return next();
+					});
+				}
+				return next();
+			}).catch(function(e) {
+				updBtn.disabled = false;
+				updBtn.textContent = updLabel;
+				ui.addNotification(null, E('p', {}, _('更新失败：') + hk3.describeError(e)), 'error');
+			});
+		});
+
+		var testBtn2 = actions.querySelector('.honk-test-all');
+		actions.insertBefore(updBtn, testBtn2 ? testBtn2.nextSibling : actions.firstChild);
+	}
+
+	/* ---- 跟着 tab 显隐 ---- */
 	function syncVisibility() {
-		if (!topMenu) return;
-		var active = topMenu.querySelector('li.cbi-tab a');
-		btn.style.display = (active && active.textContent.trim() === _('节点')) ? '' : 'none';
+		var tab = activeTab();
+		var testBtn = actions.querySelector('.honk-test-all');
+		var updBtn = actions.querySelector('.honk-update-all');
+		if (testBtn) testBtn.style.display = (tab === _('节点')) ? '' : 'none';
+		if (updBtn) updBtn.style.display = (tab === _('订阅')) ? '' : 'none';
 	}
 
 	if (topMenu) {
@@ -604,7 +674,6 @@ function mountTestAll(el) {
 		});
 	}
 
-	actions.insertBefore(btn, actions.firstChild);
 	syncVisibility();
 }
 

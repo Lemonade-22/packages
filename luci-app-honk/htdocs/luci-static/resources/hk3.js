@@ -437,4 +437,4 @@ function renderApplyStatus() {
 return baseclass.extend({ api: api, deviceStatus: function() { return deviceStatus(); }, nodes: function() { return page('nodes'); }, providers: function() { return page('providers'); },
 	waitOperation: waitOperation, health: health, renderConnection: renderConnection,
 	renderProviders: renderProviders, renderPicking: renderPicking, reload: reload, renderApplyStatus: renderApplyStatus,
-	mountStatusBanner: mountStatusBanner, fullRow: fullRow, layoutFullRows: layoutFullRows });
+	describeError: describeError, mountStatusBanner: mountStatusBanner, fullRow: fullRow, layoutFullRows: layoutFullRows });
