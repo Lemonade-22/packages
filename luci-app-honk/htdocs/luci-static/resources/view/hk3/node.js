@@ -63,7 +63,15 @@ return view.extend({
 		var base = view.prototype.handleSaveApply;
 		var chain = base ? base.call(this, ev, mode) : Promise.resolve();
 		return chain.then(function(res) {
-			return hk3.applyService().then(function() { return res; });
+			return hk3.applyService().then(function() {
+				// LuCI 应用完会重渲染 map，插在外面的横幅会被冲掉，这里补挂一次
+				window.setTimeout(function() {
+					var map = document.querySelector('#cbi-honk');
+					if (map && !map.querySelector('.honk-status-banner'))
+						hk3.mountStatusBanner(map);
+				}, 400);
+				return res;
+			});
 		});
 	},
 

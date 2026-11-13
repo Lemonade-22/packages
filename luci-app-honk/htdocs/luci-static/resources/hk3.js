@@ -144,6 +144,7 @@ function layoutFullRows(root) {
  */
 function mountStatusBanner(el) {
 	var banner = E('div', {
+		'class': 'honk-status-banner',
 		'style': 'padding:8px 0;margin:0 0 10px;font-weight:600;font-size:14px;' +
 		         'font-style:italic;color:#d9534f;border-bottom:1px solid #ddd;'
 	}, _('正在读取 honk 状态…'));
@@ -172,18 +173,36 @@ function mountStatusBanner(el) {
 		});
 	}
 
+	// 「保存并应用」之后 LuCI 会重渲染 map，把外面插进来的节点冲掉。
+	// 这里把插入单独抽出来，掉了就重新挂回去，别让状态凭空消失。
+	function place() {
+		var host = el.isConnected ? el : document.querySelector('#cbi-honk');
+		if (!host) return;
+
+		var anchor = host.querySelector('.cbi-map-descr');
+		if (anchor && anchor.nextSibling)
+			host.insertBefore(banner, anchor.nextSibling);
+		else if (anchor)
+			host.appendChild(banner);
+		else
+			host.insertBefore(banner, host.firstChild);
+
+		if (!box.isConnected && banner.isConnected)
+			banner.insertAdjacentElement('afterend', box);
+	}
+
+	var box = renderApplyStatus();
+
 	refresh();
-	poll.add(function() { if (!banner.isConnected) return; return refresh(); }, 10);
+	poll.add(function() {
+		if (!banner.isConnected) {
+			place();
+			return refresh();
+		}
+		return refresh();
+	}, 10);
 
-	var anchor = el.querySelector('.cbi-map-descr');
-	if (anchor && anchor.nextSibling)
-		el.insertBefore(banner, anchor.nextSibling);
-	else if (anchor)
-		el.appendChild(banner);
-	else
-		el.insertBefore(banner, el.firstChild);
-
-	banner.insertAdjacentElement('afterend', renderApplyStatus());
+	place();
 	return banner;
 }
 
