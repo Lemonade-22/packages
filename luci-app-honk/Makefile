@@ -6,13 +6,14 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=luci-app-honk
 PKG_VERSION:=20261113
-PKG_RELEASE:=1
+PKG_RELEASE:=2
 
 LUCI_TITLE:=LuCI for honk - eBPF transparent proxy
 # honk-core 不在标准 feed 里，装完本插件后自行安装（daeuniverse 源或自编），
 # 这里不写死依赖，否则整条 CI 会因为找不到包而失败。
 LUCI_DEPENDS:=+luci-base
-LUCI_PKGARCH:=all
+# 包里带了 honk-core 二进制，必须跟随目标架构，不能标 all
+# （CI 会把对应架构的 honk-core 放进 root/usr/bin/）
 
 define Package/$(PKG_NAME)/conffiles
 /etc/config/honk

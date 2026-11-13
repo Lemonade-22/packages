@@ -129,6 +129,32 @@ jobs:
           chmod +x "$SDK_ROOT/package/luci-app-honk/root/etc/init.d/honk" 2>/dev/null || true
           chmod +x "$SDK_ROOT/package/luci-app-honk/root/usr/share/honk/"*.sh 2>/dev/null || true
 
+      # honk-core 是预编译的静态二进制，不在这里编译，直接按架构取官方 release。
+      # stock 版用系统 /sys/kernel/btf/vmlinux，不需要配套的 vmlinux-btf-builtin。
+      - name: 放入 honk-core
+        env:
+          HONK_CORE_VER: v0.1.0-beta.6
+        run: |
+          case "${{ matrix.platform }}" in
+            arm64) CORE_ARCH=aarch64 ;;
+            amd64) CORE_ARCH=x86_64 ;;
+            *) echo "::error::unknown platform"; exit 1 ;;
+          esac
+
+          url="https://github.com/daeuniverse/honk/releases/download/${HONK_CORE_VER}/honk-core-${HONK_CORE_VER}-${CORE_ARCH}-unknown-linux-musl-stock-native-api.tar.gz"
+          echo "fetching $url"
+          curl -fsSL --retry 3 -o "$RUNNER_TEMP/honk-core.tar.gz" "$url"
+          mkdir -p "$RUNNER_TEMP/honk-core-extract"
+          tar -xzf "$RUNNER_TEMP/honk-core.tar.gz" -C "$RUNNER_TEMP/honk-core-extract"
+
+          bin="$(find "$RUNNER_TEMP/honk-core-extract" -name honk-core -type f -print -quit)"
+          [ -n "$bin" ] || { echo "::error::honk-core not found in archive"; exit 1; }
+
+          mkdir -p "$SDK_ROOT/package/luci-app-honk/root/usr/bin"
+          cp "$bin" "$SDK_ROOT/package/luci-app-honk/root/usr/bin/honk-core"
+          chmod 755 "$SDK_ROOT/package/luci-app-honk/root/usr/bin/honk-core"
+          ls -l "$SDK_ROOT/package/luci-app-honk/root/usr/bin/honk-core"
+
       - name: 准备软件包源
         run: |
           cache_dir="$HOME/.cache/immortalwrt-dl/${{ matrix.platform }}"
