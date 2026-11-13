@@ -129,19 +129,25 @@ mkdir -p "$(dirname "$OUT")"
   # 认出口，会把 br-lan 当成 WAN，连路由器自己的 SSH / LuCI / DNS 一起劫走，
   # 配完就再也连不上。先把 LAN 网段和本机 dnsmasq 放行，这两条必须在最前面。
   lan_cidr="$(uci -q get network.lan.ipaddr 2>/dev/null | head -n 1)"
-  if [ -n "$lan_cidr" ]; then
+  lan_ip="${lan_cidr%%/*}"
+  if [ -n "$lan_cidr" ] && [ -n "$lan_ip" ]; then
     case "$lan_cidr" in
-      */*) echo "    sip($(cidr_net "$lan_cidr")) -> direct" ;;
+      */*) net="$(cidr_net "$lan_cidr")" ;;
       *)
         lan_mask="$(uci -q get network.lan.netmask 2>/dev/null)"
         if [ -n "$lan_mask" ]; then
-          echo "    sip($(cidr_net "$lan_cidr/$lan_mask")) -> direct"
+          net="$(cidr_net "$lan_cidr/$lan_mask")"
         else
-          echo "    sip($lan_cidr/32) -> direct"
+          net=""
         fi
         ;;
     esac
+    # 只放行"局域网访问路由器本体"，不能写成 sip(<lan>) -> direct：
+    # 那样连 LAN 设备去外网的流量也一起直连，代理形同虚设。
+    # 目的地址限定成路由器自己的 LAN IP，入站的 SSH/LuCI 才不会被劫走。
+    echo "    sip(${net:-$lan_cidr}) && dip($lan_ip) -> direct"
   fi
+  # 路由器自己发起的 DNS 查询不能被绕回 honk，否则成环
   echo "    pname(dnsmasq) -> direct"
 
   target="direct"
