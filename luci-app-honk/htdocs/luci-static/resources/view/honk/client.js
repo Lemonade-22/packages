@@ -417,8 +417,11 @@ return view.extend({
 					'填了 DNS 上游时，还会在 dns.routing.request 里生成对应的 sip() 规则。' +
 					'这些规则排在大陆直连规则之前，所以网段总是优先。')),
 				E('p', {}, had.length
-					? _('本机无线网络：') + E('em', {},
-						had.map(function(w) { return (w.ssid || w['.name']); }).join('、'))
+					// 字符串 + DOM 会变成 "[object HTMLElement]"，必须用数组
+					? [
+						_('本机无线网络：'),
+						E('em', {}, had.map(function(w) { return (w.ssid || w['.name']); }).join('、'))
+					]
 					: _('本机没有读到无线接口——可能是 WIFI-NO 固件（无无线驱动）。' +
 						'接口一栏留空即可，直接填网段。'))
 			]);
@@ -453,8 +456,7 @@ return view.extend({
 		});
 		o.rmempty = false;
 
-		o = ssr.option(form.ListValue, 'interface', _('接口'),
-			_('对应 /etc/config/wireless 里的 wifi-iface 设备名。'));
+		o = ssr.option(form.ListValue, 'interface', _('接口'));
 		(data.ifaces || []).forEach(function(i) {
 			o.value(i, i);
 		});
