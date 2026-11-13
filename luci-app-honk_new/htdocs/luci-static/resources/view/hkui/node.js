@@ -54,7 +54,17 @@ return view.extend({
 		var s = m.section(form.NamedSection, 'config', 'honk_new');
 		s.anonymous = true;
 
+		// 照 HomeProxy 图11 的做法：每个订阅单独一个 tab。
+		// tab 名优先用订阅名，没起名就用 URL 主机名，再不行用链接前 24 个字符。
+		var subTabs = [];
+		(data.providers || []).forEach(function(p) {
+			if (p.kind === 'inline') return;   // 手动节点归「节点」tab，不重复列
+			var tag = p.name || p.id;
+			subTabs.push({ id: 'sub' + subTabs.length, label: subLabel(p, subTabs.length), tag: tag });
+		});
+
 		s.tab('nodes', _('节点'));
+		subTabs.forEach(function(t) { s.tab(t.id, t.label); });
 		s.tab('groups', _('分组'));
 		s.tab('subs', _('订阅'));
 
@@ -145,10 +155,12 @@ return view.extend({
 		o.placeholder = 'vless://uuid@host:443?security=tls&sni=host#name';
 		o.rmempty = false;
 
-		/* 当前生效的节点（含订阅解析出来的）—— 只读，带延迟和测试 */
-		o = s.taboption('nodes', form.DummyValue, '_runtime_nodes', _('当前节点'));
-		o.rawhtml = true;
-		o.cfgvalue = function() { return renderRuntimeNodes(data); };
+		// 每个订阅的节点表，放在它自己的 tab 里
+		(self._subTabs || []).forEach(function(t) {
+			var opt = s.taboption(t.id, form.DummyValue, '_nodes_' + t.id, _('节点列表'));
+			opt.rawhtml = true;
+			opt.cfgvalue = function() { return renderProviderNodes(data, t.tag); };
+		});
 
 		/* ================= 分组 ================= */
 
@@ -335,9 +347,27 @@ function fullRow(node) {
 	return node;
 }
 
-/* 当前生效的节点表：名称 / 延迟 / 测试 / 类型 / 地址 / 端口，照 HomeProxy 的列 */
-function renderRuntimeNodes(data) {
-	var rows = (data.runtime || []).filter(function(n) { return n.protocol !== 'direct' && n.protocol !== 'block'; });
+/*
+ * 订阅 tab 的标题：优先订阅名，其次 URL 主机名，最后截断链接本身。
+ * 机场经常不起名，那就用主机名区分——dasho.pqjc.site 比"订阅 2"有用得多。
+ */
+function subLabel(p, i) {
+	var name = (p.name || '').trim();
+	if (name && name !== 'inline') return name;
+	var u = String(p.url_redacted || p.url || '');
+	var m = u.match(/^[a-z]+:\/\/([^/?#]+)/i);
+	if (m && m[1]) return m[1];
+	if (u) return u.slice(0, 24);
+	return _('订阅 ') + (i + 1);
+}
+
+/* 某个订阅的节点表：名称 / 延迟 / 测试 / 类型 / 地址，照 HomeProxy 的列 */
+function renderProviderNodes(data, tag) {
+	var rows = (data.runtime || []).filter(function(n) {
+		if (n.protocol === 'direct' || n.protocol === 'block') return false;
+		// 没有 tag 时给空订阅显示全部，有 tag 就只显示这个订阅的
+		return !tag || n.subscription_tag === tag;
+	});
 
 	var table = E('table', { 'class': 'table' },
 		E('tr', { 'class': 'tr table-titles' },
@@ -347,7 +377,8 @@ function renderRuntimeNodes(data) {
 
 	if (!rows.length) {
 		table.appendChild(E('tr', { 'class': 'tr' },
-			E('td', { 'class': 'td', 'colspan': 6, 'style': 'color:#888' }, _('还没有生效的节点。填好订阅并保存应用后这里会出现。'))));
+			E('td', { 'class': 'td', 'colspan': 6, 'style': 'color:#888' },
+				_('这个订阅还没有解析出节点。点「订阅」页的刷新，失败原因会显示在那里。'))));
 		return E('div', {}, table);
 	}
 
