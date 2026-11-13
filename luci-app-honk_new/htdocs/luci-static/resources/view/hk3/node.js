@@ -441,9 +441,11 @@ function mountTestAll(el) {
 		return;
 	}
 
+	// 固定宽度：进度文字比标题短，不固定的话旁边「保存」「重置」会跟着左右跳。
 	var btn = E('button', {
 		'class': 'btn cbi-button',
-		'style': 'margin-right:8px'
+		'style': 'margin-right:8px;min-width:9.5em;text-align:center;' +
+		         'font-variant-numeric:tabular-nums'
 	}, _('测试所有节点'));
 
 	var running = false;
@@ -571,19 +573,26 @@ function renderProviderNodes(data, tag) {
 
 	// 只有两列有意义：延迟和测试。类型/地址/订阅在单订阅 tab 里是冗余的，
 	// 但保留「类型」方便一眼看出协议，其余两列去掉。
-	var table = E('table', { 'class': 'table', 'style': 'width:100%' },
+	// separate + spacing 0：让边框长在单元格自己身上，sticky 表头才不会丢边框。
+	// 用 collapse 的话边框归 table，一旦 th 提升成 sticky 就看不见了。
+	var table = E('table', { 'class': 'table',
+		'style': 'width:100%;border-collapse:separate;border-spacing:0' },
 		E('tr', { 'class': 'tr table-titles' },
 			[{ t: _('名称'), k: 'name' }, { t: _('延迟'), k: 'latency' },
 			 { t: _('测试'), k: null }, { t: _('类型'), k: 'type' }].map(function(col) {
-				// 滚动容器的表头必须吸顶，否则往下滚时它会跟着内容走，
-				// 看起来就像标题栏错位到数据行中间。
-				// border-collapse 下 sticky 的 th 会丢掉自己的边框，滚动时那一行
-				// 就变成一条空白。用 inset box-shadow 把上下边框画回来。
+				// 表头吸顶：往下滚时它得钉住，否则会跟着内容走、看着像错位到数据行中间。
+				//
+				// 边框用真实 border，不用 box-shadow 补。collapse 模式下边框归 table
+				// 所有，提升成 sticky 的 th 借不到自己那一条，滚动时整行变空白 ——
+				// 阴影只是把症状盖住。表格已改成 separate + border-spacing 0，
+				// 边框重新长在 th 身上，sticky 时自然跟着走。
 				var st = 'position:sticky;top:0;z-index:2;' +
 					'background:var(--background-color-high,#fff);' +
-					'box-shadow:inset 0 -1px 0 rgba(0,0,0,.14),inset 0 1px 0 rgba(0,0,0,.14);';
+					'border-bottom:1px solid rgba(0,0,0,.14);' +
+					'border-top:1px solid rgba(0,0,0,.14);';
 				if (col.k) st += 'cursor:pointer;user-select:none;white-space:nowrap';
 
+				if (col.k === 'latency') st += ';width:110px';
 				var th = E('th', { 'class': 'th', 'style': st }, col.t);
 				if (col.k) {
 					th.setAttribute('data-sortkey', col.k);
@@ -604,7 +613,9 @@ function renderProviderNodes(data, tag) {
 	}
 
 	rows.slice(0, 200).forEach(function(n) {
-		var cell = E('td', { 'class': 'td' }, _('未测'));
+		// 固定宽度：单元格内容在「未测 / 测试中… / 223 ms」之间切换，
+		// 自适应宽度会让整列跟着一抽一抽。
+		var cell = E('td', { 'class': 'td', 'style': 'width:110px;font-variant-numeric:tabular-nums' }, _('未测'));
 		var btn = E('button', { 'class': 'btn honk-probe', 'style': 'padding:1px 8px;font-size:12px',
 			'data-node': n.id }, _('测试'));
 		var addr = n.address || (n.server || '') + (n.port ? ':' + n.port : '');
