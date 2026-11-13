@@ -955,12 +955,48 @@ return view.extend({
 
 		o = s.taboption('custom', form.TextValue, '_custom_rules', _('路由规则'),
 			_('写 routing { } 的内部内容，dae 语法，一行一条规则。' +
-			  '存在 /etc/honk/custom.rules 里，不走 UCI。'));
-		o.rows = 20;
+			  '开关关闭时这里显示的是当前实际生效的规则，只读；开启后你写的内容会整段替换它们。' +
+			  '内容存在 /etc/honk/custom.rules 里，不走 UCI。'));
+		o.rows = 22;
 		o.monospace = true;
-		o.depends('custom_rules_enabled', '1');
+		// 不隐藏：关掉开关时也要看得见现在跑的是什么，只是不能改
 		o.cfgvalue = function() {
-			return fs.read('/etc/honk/custom.rules').catch(function() { return ''; });
+			return fs.read('/etc/honk/custom.rules').catch(function() { return ''; }).then(function(txt) {
+				if ((txt || '').trim().length)
+					return txt;
+
+				// 没写过自定义规则，就把生成出来的 routing 块摊开给人看。
+				// 这些是各路设置合出来的结果，不是用户输入的，所以只读展示。
+				return fs.read('/etc/honk/config.dae').then(function(dae) {
+					var m = String(dae || '').match(/^routing[ \t]*\{([\s\S]*?)^\}/m);
+					if (!m) return '';
+					return m[1].replace(/^[ \t]{4}/gm, '').replace(/^\n+/, '').replace(/[ \t]+$/, '');
+				}).catch(function() { return ''; });
+			});
+		};
+		o.renderWidget = function() {
+			var w = form.TextValue.prototype.renderWidget.apply(this, arguments);
+			var ta = w.querySelector('textarea');
+			if (!ta) return w;
+
+			var box = ta;
+			while (box && box.tagName !== 'FORM') box = box.parentNode;
+			var sync = function() {
+				var on = uci.get('honk', 'config', 'custom_rules_enabled') === '1';
+				ta.readOnly = !on;
+				ta.style.background = on ? '' : '#f2f2f2';
+				ta.style.color = on ? '' : '#666';
+			};
+			sync();
+			// 开关就在同一张表单里，切一下 UCI 的待提交值立刻变，这里跟着同步
+			if (box && !box.__honkCustomBound) {
+				box.__honkCustomBound = true;
+				box.addEventListener('change', function(ev) {
+					if (ev.target && ev.target.getAttribute('name') === 'custom_rules_enabled')
+						sync();
+				});
+			}
+			return w;
 		};
 		o.write = function(section_id, value) {
 			return fs.write('/etc/honk/custom.rules', String(value || ''));
