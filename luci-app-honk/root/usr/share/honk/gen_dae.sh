@@ -16,6 +16,20 @@ TMP="${OUT}.tmp"
 q() { uci -q get "$CONF.$1" 2>/dev/null || true; }
 sections() { uci show "$CONF" 2>/dev/null | sed -n "s/^$CONF\.\([^.=]*\)=$1$/\1/p"; }
 
+# 把 192.168.1.1/24 规整成 192.168.1.0/24。honk 接受带主机位的写法，
+# 但规则里写网络地址语义更清楚，也避免不同版本对主机位的解释有差异。
+cidr_net() {
+	awk -v c="$1" 'BEGIN{
+		n = split(c, p, "/")
+		bits = (n > 1) ? p[2] + 0 : 32
+		split(p[1], a, ".")
+		v = a[1]*16777216 + a[2]*65536 + a[3]*256 + a[4]
+		sh = 2^(32 - bits)
+		v = int(v / sh) * sh
+		printf "%d.%d.%d.%d/%d", int(v/16777216)%256, int(v/65536)%256, int(v/256)%256, v%256, bits
+	}'
+}
+
 # honk 的字符串用单引号包；分享链接里不会有单引号，有就剔掉
 sq() { printf "%s" "$1" | tr -d "\047"; }
 
@@ -111,6 +125,25 @@ mkdir -p "$(dirname "$OUT")"
   [ "$wrote_group" = "1" ] && { echo "}"; echo; }
 
   echo "routing {"
+  # 旁路由（单臂路由）拓扑下，上游和下游是同一个接口。honk 如果只按默认路由
+  # 认出口，会把 br-lan 当成 WAN，连路由器自己的 SSH / LuCI / DNS 一起劫走，
+  # 配完就再也连不上。先把 LAN 网段和本机 dnsmasq 放行，这两条必须在最前面。
+  lan_cidr="$(uci -q get network.lan.ipaddr 2>/dev/null | head -n 1)"
+  if [ -n "$lan_cidr" ]; then
+    case "$lan_cidr" in
+      */*) echo "    sip($(cidr_net "$lan_cidr")) -> direct" ;;
+      *)
+        lan_mask="$(uci -q get network.lan.netmask 2>/dev/null)"
+        if [ -n "$lan_mask" ]; then
+          echo "    sip($(cidr_net "$lan_cidr/$lan_mask")) -> direct"
+        else
+          echo "    sip($lan_cidr/32) -> direct"
+        fi
+        ;;
+    esac
+  fi
+  echo "    pname(dnsmasq) -> direct"
+
   target="direct"
   if [ "$MAIN_GROUP" != "nil" ] && [ -n "$MAIN_GROUP" ]; then
     target="$(sq "$MAIN_GROUP")"
