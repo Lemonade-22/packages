@@ -26,6 +26,15 @@ function describeError(e) {
   return msg;
 }
 
+/* 「保存并应用」只改 UCI，内核起不起来是 init 脚本的事。
+   procd 的 uci trigger 只有在该服务开机时被 enable 过才注册，刚装完的机器上
+   等于没有，于是打开开关点应用什么也不会发生。这里显式跑一次 reload。 */
+function applyService() {
+	return fs.exec('/etc/init.d/honk', ['reload']).catch(function(e) {
+		return (e && e.message) || '';
+	});
+}
+
 function api() {
 	var args = Array.prototype.slice.call(arguments);
 	var script = READ_ACTIONS[args[0]] ? '/usr/share/honk/honk-read.sh' : '/usr/share/honk/honk-api.sh';
@@ -134,6 +143,7 @@ function layoutFullRows(root) {
  * 位置照 HomeProxy —— 挂在副标题（.cbi-map-descr）下面，不是页面最顶上。
  */
 function mountStatusBanner(el) {
+	var lastHeal = 0;
 	var banner = E('div', {
 		'style': 'padding:8px 0;margin:0 0 10px;font-weight:600;font-size:14px;' +
 		         'font-style:italic;color:#d9534f;border-bottom:1px solid #ddd;'
@@ -152,6 +162,19 @@ function mountStatusBanner(el) {
 			} else if (state === 'stopped') {
 				banner.style.color = '#ed4014';
 				banner.textContent = label + ' ' + _('未运行');
+
+				// 开关开着但内核没跑，多半是「保存并应用」只写了 UCI：
+				// procd 的 uci reload trigger 要求服务在开机时被 enable 过，
+				// 刚装好的机器上它根本不存在，于是点了应用什么都不会发生。
+				// 这里补一次 reload —— init 脚本里 enabled=0 时它是空操作，
+				// 所以不用担心把关着的服务拉起来。20 秒最多一次，免得打架。
+				var now = Date.now();
+				if (now - lastHeal > 20000) {
+					lastHeal = now;
+					applyService().then(function() {
+						window.setTimeout(function() { refresh(); }, 1500);
+					});
+				}
 			} else {
 				banner.style.color = '#ff9900';
 				banner.textContent = _('honk-core 未安装');
@@ -437,4 +460,4 @@ function renderApplyStatus() {
 return baseclass.extend({ api: api, deviceStatus: function() { return deviceStatus(); }, nodes: function() { return page('nodes'); }, providers: function() { return page('providers'); },
 	waitOperation: waitOperation, health: health, renderConnection: renderConnection,
 	renderProviders: renderProviders, renderPicking: renderPicking, reload: reload, renderApplyStatus: renderApplyStatus,
-	describeError: describeError, mountStatusBanner: mountStatusBanner, fullRow: fullRow, layoutFullRows: layoutFullRows });
+	describeError: describeError, applyService: applyService, mountStatusBanner: mountStatusBanner, fullRow: fullRow, layoutFullRows: layoutFullRows });
