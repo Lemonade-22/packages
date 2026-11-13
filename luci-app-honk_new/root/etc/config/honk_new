@@ -66,6 +66,15 @@ config group 'proxy'
 	option check_url 'http://1.1.1.1'
 	option tolerance '50'
 	option final 'block'
+	# 机场塞在订阅开头的占位节点：有连接参数但连不上，不滤掉自动选优会挑它们
+	option filter_nodes 'blacklist'
+	list filter_keywords '剩余流量'
+	list filter_keywords '套餐到期'
+	list filter_keywords '距离下次'
+	list filter_keywords '过期时间'
+	list filter_keywords '官网'
+	list filter_keywords 'Traffic'
+	list filter_keywords 'Expire'
 
 # 订阅：下载后解析成节点，节点名会带上 tag 前缀
 config subscription 'example_sub'

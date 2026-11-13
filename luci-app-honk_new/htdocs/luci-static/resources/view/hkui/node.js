@@ -237,6 +237,21 @@ return view.extend({
 		o.description = _('自动包含选中订阅的节点。成员和订阅成员均留空时，组包含全部节点。');
 		o.rmempty = true;
 
+		// 机场常在订阅里塞「剩余流量」「套餐到期」这类占位节点，连接参数是真的
+		// 但连不上，自动选优会挑到它们。这里按节点名过滤。
+		o = groupsSec.option(form.ListValue, 'filter_nodes', _('过滤节点'));
+		o.value('disabled', _('不过滤'));
+		o.value('blacklist', _('黑名单：丢弃命中关键词的'));
+		o.value('whitelist', _('白名单：只保留命中关键词的'));
+		o.default = 'blacklist';
+		o.rmempty = false;
+
+		o = groupsSec.option(form.DynamicList, 'filter_keywords', _('过滤关键词'));
+		o.placeholder = '剩余流量';
+		o.description = _('按节点名做子串匹配，不区分大小写。白名单模式下只留命中的节点，' +
+			'黑名单模式下丢弃命中的节点。留空等于不过滤。');
+		o.rmempty = true;
+
 		o = groupsSec.option(form.Value, 'check_url', _('健康检查地址'));
 		o.placeholder = 'http://1.1.1.1';
 		o.description = _('用 IP 而不是域名。用域名会陷入「探测要解析、解析要代理、代理要评分」的死锁。');
@@ -369,15 +384,20 @@ function renderProviderNodes(data, tag) {
 		return !tag || n.subscription_tag === tag;
 	});
 
-	var table = E('table', { 'class': 'table' },
+	// 只有两列有意义：延迟和测试。类型/地址/订阅在单订阅 tab 里是冗余的，
+	// 但保留「类型」方便一眼看出协议，其余两列去掉。
+	var table = E('table', { 'class': 'table', 'style': 'width:100%' },
 		E('tr', { 'class': 'tr table-titles' },
-			[_('名称'), _('延迟'), _('测试'), _('类型'), _('地址'), _('订阅')].map(function(t) {
-				return E('th', { 'class': 'th' }, t);
+			[_('名称'), _('延迟'), _('测试'), _('类型')].map(function(t) {
+				// 滚动容器的表头必须吸顶，否则往下滚时它会跟着内容走，
+				// 看起来就像标题栏错位到数据行中间。
+				return E('th', { 'class': 'th',
+					'style': 'position:sticky;top:0;z-index:2;background:var(--background-color-high,#fff);' }, t);
 			})));
 
 	if (!rows.length) {
 		table.appendChild(E('tr', { 'class': 'tr' },
-			E('td', { 'class': 'td', 'colspan': 6, 'style': 'color:#888' },
+			E('td', { 'class': 'td', 'colspan': 4, 'style': 'color:#888' },
 				_('这个订阅还没有解析出节点。点「订阅」页的刷新，失败原因会显示在那里。'))));
 		return E('div', {}, table);
 	}
@@ -422,11 +442,9 @@ function renderProviderNodes(data, tag) {
 			E('td', { 'class': 'td' }, n.name || n.id),
 			cell,
 			E('td', { 'class': 'td' }, btn),
-			E('td', { 'class': 'td' }, n.protocol || '-'),
-			E('td', { 'class': 'td', 'style': 'font-size:12px' }, addr),
-			E('td', { 'class': 'td' }, n.subscription_tag || _('手动'))
+			E('td', { 'class': 'td' }, n.protocol || '-')
 		]));
 	});
 
-	return fullRow(E('div', { 'style': 'max-height:32em;overflow:auto' }, table));
+	return fullRow(E('div', { 'style': 'max-height:32em;overflow:auto;position:relative' }, table));
 }
