@@ -1,0 +1,32 @@
+# SPDX-License-Identifier: MIT
+name: Delete-All-Workflow-Runs
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: write
+
+concurrency:
+  group: delete-all-workflow-logs
+  cancel-in-progress: false
+
+jobs:
+  delete-runs:
+    name: 删除所有已完成的运行记录及 Artifacts
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout cleanup script
+        uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      - name: Delete completed workflow runs
+        uses: actions/github-script@v8
+        with:
+          retries: 3
+          script: |
+            const cleanup = require('./Scripts/Delete-Workflow-Runs.cjs');
+            await cleanup({ github, context, core });
