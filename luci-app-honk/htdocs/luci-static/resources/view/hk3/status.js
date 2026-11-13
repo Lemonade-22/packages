@@ -8,67 +8,58 @@
 'require hk3';
 
 /*
- * luci-app-honk_new · 服务状态
+ * luci-app-honk · 服务状态
  *
  * 只读页：没有任何可保存的配置，只有连接测试、资源更新和日志。
  * 照 HomeProxy 的做法垂直堆叠独立卡片，每张卡片自带动作按钮。
  */
 /* 让 DummyValue 的内容占满整行，否则表格被 30% 宽的标签列挤到右边 */
-function fullRow(node) {
-	var p = node;
-	while (p && !(p.classList && p.classList.contains('cbi-value')))
-		p = p.parentNode;
-	if (p) {
-		var t = p.querySelector('.cbi-value-title');
-		if (t) t.style.display = 'none';
-		var f = p.querySelector('.cbi-value-field');
-		if (f) { f.style.marginLeft = '0'; f.style.width = '100%'; }
-	}
-	return node;
-}
 
 return view.extend({
+	handleSave: null,
+	handleSaveApply: null,
+	handleReset: null,
 	load: function() {
 		return Promise.all([
-			uci.load('honk_new'),
-			fs.exec('/usr/share/honk_new/log-tail.sh').then(function(r) { return r.stdout; }).catch(function() { return ''; })
+			uci.load('honk'),
+			fs.exec('/usr/share/honk/log-tail.sh').then(function(r) { return r.stdout; }).catch(function() { return ''; })
 		]).then(function(res) {
 			return { log: res[1] || '' };
 		});
 	},
 
 	render: function(data) {
-		var m = new form.Map('honk_new', _('服务状态'),
+		var m = new form.Map('honk', _('服务状态'),
 			_('运行情况、连通性、规则资源和日志。这一页不写配置。'));
 
-		var s = m.section(form.NamedSection, 'config', 'honk_new');
+		var s = m.section(form.NamedSection, 'config', 'honk');
 		s.anonymous = true;
 
 		// taboption 必须指向一个已经声明的 tab，否则直接抛异常、整页白屏。
 		// 拆文件时这一段是从单页版搬过来的，但 tab 声明留在了 client.js。
-		s.tab('status', _('运行状态'));
+
 
 		/* ================= 仪表盘 ================= */
 
-		var o = s.taboption('status', form.DummyValue, '_status_text', _('服务'));
+		var o = s.option(form.DummyValue, '_status_text', _('服务'));
 		o.rawhtml = true;
 		o.cfgvalue = function() {
-			var enabled = uci.get('honk_new', 'config', 'enabled') === '1';
+			var enabled = uci.get('honk', 'config', 'enabled') === '1';
 			return E('div', {}, [
 				E('p', {}, enabled ? _('配置中已启用。') : _('配置中已禁用。')),
 				E('p', { 'class': 'cbi-value-description' },
-					_('honk 在重载时写出 /etc/honk_new/config.dae。要看实时流量、节点延迟' +
+					_('honk 在重载时写出 /etc/honk/config.dae。要看实时流量、节点延迟' +
 					  '和 DNS 统计，装 doona（原生 API）或 zashboard（Clash API）——' +
 					  '两者都是 honk 项目提供的一键安装。'))
 			]);
 		};
 
-		o = s.taboption('status', form.DummyValue, '_probe', _('连通性'));
+		o = s.option(form.DummyValue, '_probe', _('连通性'));
 		o.rawhtml = true;
 		o.cfgvalue = function() { return hk3.renderConnection(); };
 
 		/* 资源：geo 数据在不在、多大、什么时候更新的 */
-		o = s.taboption('status', form.DummyValue, '_res', _('规则资源'));
+		o = s.option(form.DummyValue, '_res', _('规则资源'));
 		o.rawhtml = true;
 		o.cfgvalue = function() {
 			var files = [
@@ -94,7 +85,7 @@ return view.extend({
 					}, _('正在下载 GeoIP / GeoSite…'));
 					ui.showModal(_('更新规则资源'), [out, E('div', { 'class': 'right' },
 						E('button', { 'class': 'btn', 'click': ui.hideModal }, _('关闭')))]);
-					return fs.exec('/usr/share/honk_new/update-geo.sh').then(function(res) {
+					return fs.exec('/usr/share/honk/update-geo.sh').then(function(res) {
 						out.textContent = (res.stdout || '') + (res.stderr || '');
 						if (res.code !== 0) throw new Error(res.stderr || _('规则下载失败'));
 						return hk3.reload();
@@ -105,7 +96,7 @@ return view.extend({
 			}, _('更新全部'));
 
 			return Promise.all(files.map(function(item) {
-				return fs.stat('/usr/share/honk_new/geo/' + item[0])
+				return fs.stat('/usr/share/honk/geo/' + item[0])
 					.catch(function() { return null; });
 			})).then(function(stats) {
 				files.forEach(function(item, i) {
@@ -134,7 +125,7 @@ return view.extend({
 		};
 
 		/* 日志观察窗：poll 每 5 秒重读一次，只读 */
-		o = s.taboption('status', form.DummyValue, '_log', _('运行日志'));
+		o = s.option(form.DummyValue, '_log', _('运行日志'));
 		o.rawhtml = true;
 		o.cfgvalue = function() {
 			var box = E('pre', {
@@ -143,7 +134,8 @@ return view.extend({
 					'font-family:monospace;font-size:12px;margin:0;'
 			}, data.log || _('（暂无日志）'));
 			poll.add(function() {
-				return fs.exec('/usr/share/honk_new/log-tail.sh').then(function(res) {
+				if (!box.isConnected) return;
+				return fs.exec('/usr/share/honk/log-tail.sh').then(function(res) {
 					var txt = res.stdout;
 					box.textContent = txt || _('（暂无日志）');
 					box.scrollTop = box.scrollHeight;
@@ -154,7 +146,7 @@ return view.extend({
 
 		/* 仪表盘：装了什么就显示什么入口。
 		   doona 挂在 native API 端口，zashboard 一类挂 Clash API 端口。 */
-		o = s.taboption('status', form.DummyValue, '_dash', _('仪表盘'));
+		o = s.option(form.DummyValue, '_dash', _('仪表盘'));
 		o.rawhtml = true;
 		o.cfgvalue = function() {
 			var box = E('div', { 'style': 'line-height:1.8' }, _('正在检测…'));
@@ -182,7 +174,7 @@ return view.extend({
 			}
 
 			function check() {
-				return fs.exec('/usr/share/honk_new/dash-status.sh').then(function(res) {
+				return fs.exec('/usr/share/honk/dash-status.sh').then(function(res) {
 					var parts = String(res.stdout || '').trim().split('|');
 					var kind = parts[0] || '';
 					var url = (parts[1] || '').trim();
@@ -225,11 +217,11 @@ return view.extend({
 			}
 
 			check();
-			poll.add(check, 15);
+			poll.add(function() { if (!box.isConnected) return; return check(); }, 15);
 			return box;
 		};
 
-		o = s.taboption('status', form.Button, '_reload', _('重新生成配置'));
+		o = s.option(form.Button, '_reload', _('重新生成配置'));
 		o.inputtitle = _('重新生成');
 		o.inputstyle = 'apply';
 		o.onclick = function() {
@@ -240,11 +232,11 @@ return view.extend({
 
 
 		
-		var applyStatus = hk3.renderApplyStatus();
+
 
 		return m.render().then(function(el) {
-			el.appendChild(applyStatus);
 			hk3.mountStatusBanner(el);
+			hk3.layoutFullRows(el);
 			return el;
 		});
 	}

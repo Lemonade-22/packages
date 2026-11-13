@@ -1,7 +1,7 @@
 {
 	"admin/services/honk": {
 		"title": "Honk",
-		"order": 12,
+		"order": 13,
 		"action": {
 			"type": "firstchild"
 		},
@@ -11,11 +11,27 @@
 		}
 	},
 	"admin/services/honk/client": {
-		"title": "Settings",
+		"title": "客户端设置",
 		"order": 10,
 		"action": {
 			"type": "view",
-			"path": "honk/main"
+			"path": "hk3/client"
+		}
+	},
+	"admin/services/honk/node": {
+		"title": "节点设置",
+		"order": 20,
+		"action": {
+			"type": "view",
+			"path": "hk3/node"
+		}
+	},
+	"admin/services/honk/status": {
+		"title": "服务状态",
+		"order": 30,
+		"action": {
+			"type": "view",
+			"path": "hk3/status"
 		}
 	}
 }

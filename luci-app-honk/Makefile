@@ -8,7 +8,7 @@ PKG_NAME:=luci-app-honk
 PKG_VERSION:=20261113
 PKG_RELEASE:=4
 
-LUCI_TITLE:=LuCI for honk - eBPF transparent proxy
+LUCI_TITLE:=LuCI for honk - eBPF transparent proxy (新界面)
 # honk-core 不在标准 feed 里，装完本插件后自行安装（daeuniverse 源或自编），
 # 这里不写死依赖，否则整条 CI 会因为找不到包而失败。
 LUCI_DEPENDS:=+luci-base +curl +ca-bundle +ucode +ucode-mod-uci +ucode-mod-fs +jsonfilter +logrotate
@@ -39,6 +39,20 @@ chmod 700 /var/lib/honk/state
 chmod 755 /usr/share/honk/*.sh 2>/dev/null
 mkdir -p /var/run/honk
 chmod 755 /var/run/honk 2>/dev/null
+# 有些机型没有 br-lan 网桥，只有 eth0/eth1 这种裸网口。
+# 默认值写死 br-lan 的话，这些机器装完 honk 会报找不到接口、什么都不代理。
+# 装包时按 network 配置和实际网卡挑一个，用户之后仍可在界面上改。
+if [ ! -e /sys/class/net/br-lan ]; then
+	lan_dev="$(uci -q get network.lan.device 2>/dev/null)"
+	[ -n "$lan_dev" ] || lan_dev="$(uci -q get network.lan.ifname 2>/dev/null)"
+	if [ -z "$lan_dev" ]; then
+		for cand in eth1 br0 lan0 eth0; do
+			[ -e "/sys/class/net/$cand" ] && { lan_dev="$cand"; break; }
+		done
+	fi
+	[ -n "$lan_dev" ] && uci -q set honk.infra.lan_interface="$lan_dev"
+fi
+uci -q commit honk 2>/dev/null
 exit 0
 endef
 
@@ -55,6 +69,20 @@ chmod 700 /var/lib/honk/state
 chmod 755 /usr/share/honk/*.sh 2>/dev/null
 mkdir -p /var/run/honk
 chmod 755 /var/run/honk 2>/dev/null
+# 有些机型没有 br-lan 网桥，只有 eth0/eth1 这种裸网口。
+# 默认值写死 br-lan 的话，这些机器装完 honk 会报找不到接口、什么都不代理。
+# 装包时按 network 配置和实际网卡挑一个，用户之后仍可在界面上改。
+if [ ! -e /sys/class/net/br-lan ]; then
+	lan_dev="$(uci -q get network.lan.device 2>/dev/null)"
+	[ -n "$lan_dev" ] || lan_dev="$(uci -q get network.lan.ifname 2>/dev/null)"
+	if [ -z "$lan_dev" ]; then
+		for cand in eth1 br0 lan0 eth0; do
+			[ -e "/sys/class/net/$cand" ] && { lan_dev="$cand"; break; }
+		done
+	fi
+	[ -n "$lan_dev" ] && uci -q set honk.infra.lan_interface="$lan_dev"
+fi
+uci -q commit honk 2>/dev/null
 exit 0
 endef
 

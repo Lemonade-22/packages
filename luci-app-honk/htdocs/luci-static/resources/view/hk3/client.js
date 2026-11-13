@@ -8,19 +8,19 @@
 'require hk3';
 
 /*
- * luci-app-honk_new · 客户端设置
+ * luci-app-honk · 客户端设置
  *
- * 这一页只写 UCI，真正的 dae 配置由 /etc/init.d/honk_new 的 reload 生成。
+ * 这一页只写 UCI，真正的 dae 配置由 /etc/init.d/honk 的 reload 生成。
  * 路由目标只能是 direct / block / 组，所以这里是「主分组」，不是主节点。
  */
 return view.extend({
 	load: function() {
 		return Promise.all([
-			uci.load('honk_new'),
+			uci.load('honk'),
 			uci.load('network'),
 			uci.load('wireless')
 		]).then(function() {
-			var groups = uci.sections('honk_new', 'group').map(function(g) {
+			var groups = uci.sections('honk', 'group').map(function(g) {
 				return (g.name || g['.name'] || '').trim();
 			}).filter(function(n) { return n.length > 0; });
 
@@ -48,11 +48,11 @@ return view.extend({
 	},
 
 	render: function(data) {
-		var m = new form.Map('honk_new', _('Honk'),
+		var m = new form.Map('honk', _('客户端设置'),
 			_('eBPF 透明代理引擎。本页只写 UCI，' +
-			  '真正的配置在重载时生成到 /etc/honk_new/config.dae。'));
+			  '真正的配置在重载时生成到 /etc/honk/config.dae。'));
 
-		var s = m.section(form.NamedSection, 'config', 'honk_new');
+		var s = m.section(form.NamedSection, 'config', 'honk');
 		s.anonymous = true;
 
 		s.tab('routing', _('路由设置'));
@@ -114,7 +114,7 @@ return view.extend({
 
 
 		/* infra 段：接口与运行时 */
-		var sv = s.taboption('routing', form.SectionValue, '_infra', form.NamedSection, 'infra', 'honk_new');
+		var sv = s.taboption('routing', form.SectionValue, '_infra', form.NamedSection, 'infra', 'honk');
 		var ss = sv.subsection;
 
 		// 直接列本机实际存在的接口，免得用户对着空白框猜。
@@ -129,7 +129,7 @@ return view.extend({
 		});
 		// 当前值可能指向一个已经消失的接口（换了网卡配置、拔了 USB 网卡），
 		// 不在列表里就补进去，否则下拉会显示空白、用户以为配置丢了。
-		var curLan = uci.get('honk_new', 'infra', 'lan_interface');
+		var curLan = uci.get('honk', 'infra', 'lan_interface');
 		if (curLan && names.indexOf(curLan) < 0)
 			o.value(curLan, curLan + _('（当前值，接口不存在）'));
 		o.rmempty = true;
@@ -146,7 +146,7 @@ return view.extend({
 		o.default = 'info';
 
 		o = ss.option(form.Value, 'data_dir', _('运行时数据目录'));
-		o.placeholder = '/var/lib/honk_new';
+		o.placeholder = '/var/lib/honk';
 		o.rmempty = true;
 
 		/* ================= 多SSID分流 ================= */
@@ -193,7 +193,7 @@ return view.extend({
 								'class': 'btn cbi-button-action',
 								'click': ui.createHandlerFn(this, function() {
 									var existing = {};
-									uci.sections('honk_new', 'ssid_route').forEach(function(x) {
+									uci.sections('honk', 'ssid_route').forEach(function(x) {
 										if (x.name) existing[x.name] = 1;
 									});
 
@@ -204,9 +204,9 @@ return view.extend({
 										if (existing[b.ssid])
 											return;
 
-										var sid = uci.add('honk_new', 'ssid_route');
-										uci.set('honk_new', sid, 'enabled', '1');
-										uci.set('honk_new', sid, 'name', b.ssid);
+										var sid = uci.add('honk', 'ssid_route');
+										uci.set('honk', sid, 'enabled', '1');
+										uci.set('honk', sid, 'name', b.ssid);
 										// interface 不填：那个字段要的是 network 里的 wifiN 接口名，
 										// 跟 wireless 的 ifname 不是一回事，硬填会写错。
 										added++;
@@ -257,7 +257,7 @@ return view.extend({
 		ssr.sortable = true;
 		ssr.anonymous = true;
 		ssr.sectiontitle = function(section_id) {
-			return uci.get('honk_new', section_id, 'name') || section_id;
+			return uci.get('honk', section_id, 'name') || section_id;
 		};
 
 		o = ssr.option(form.Flag, 'enabled', _('启用'));
@@ -287,7 +287,7 @@ return view.extend({
 		o.rmempty = true;
 
 		o = ssr.option(form.ListValue, 'dns', _('DNS 上游'));
-		uci.sections('honk_new', 'dns_upstream').forEach(function(u) {
+		uci.sections('honk', 'dns_upstream').forEach(function(u) {
 			if (u.name)
 				o.value(u.name, u.name);
 		});
@@ -295,7 +295,7 @@ return view.extend({
 
 		/* ================= DNS ================= */
 
-		var dnsv = s.taboption('dns', form.SectionValue, '_dns', form.NamedSection, 'infra', 'honk_new');
+		var dnsv = s.taboption('dns', form.SectionValue, '_dns', form.NamedSection, 'infra', 'honk');
 		var ds = dnsv.subsection;
 
 		ds.tab('dns_basic', _('基础设置'));
@@ -362,11 +362,11 @@ return view.extend({
 		};
 
 		function dnsValue(role) {
-			var value = uci.get('honk_new', 'infra', role + '_dns');
+			var value = uci.get('honk', 'infra', role + '_dns');
 			if (value !== undefined && value !== null) return value;
 			// 只有字段完全不存在（旧安装）才回落到 dns_upstream section。
 			// 新版本会写 'none' 占位，所以字段存在即代表用户已明确表过态。
-			var old = uci.sections('honk_new', 'dns_upstream').filter(function(s) { return s.role === role && s.enabled === '1'; });
+			var old = uci.sections('honk', 'dns_upstream').filter(function(s) { return s.role === role && s.enabled === '1'; });
 			return old.length ? old[0].uri || '' : 'none';
 		}
 		[['cn', CN_DNS, _('国内 DNS')], ['remote', REMOTE_DNS, _('国外 DNS')]].forEach(function(spec) {
@@ -379,14 +379,14 @@ return view.extend({
 			select.value('custom', _('— 自定义 —')); select.value('none', _('（不设置）'));
 			select.rmempty = false;
 			select.cfgvalue = function() { var v = dnsValue(role); return v && !choices[v] ? 'custom' : v; };
-			select.write = function(id, value) { uci.set('honk_new', 'infra', key, value || 'none'); };
+			select.write = function(id, value) { uci.set('honk', 'infra', key, value || 'none'); };
 			var custom = ds.taboption('dns_servers', form.Value, key + '_custom', _('自定义 DNS URI'));
 			custom.depends(key, 'custom'); custom.rmempty = false;
 			custom.cfgvalue = function() {
 				var v = dnsValue(role);
-				return uci.get('honk_new', 'infra', key + '_custom') || (v && v !== 'custom' && !choices[v] ? v : '');
+				return uci.get('honk', 'infra', key + '_custom') || (v && v !== 'custom' && !choices[v] ? v : '');
 			};
-			custom.write = function(id, value) { uci.set('honk_new', 'infra', key + '_custom', value); };
+			custom.write = function(id, value) { uci.set('honk', 'infra', key + '_custom', value); };
 			// 正则里不要写转义的斜杠对：luci.mk 打包时的 minifier 会把它当成行注释，
   // 从那里一直截到行尾，产出的 panel.js 报 Invalid regular expression flags。
   // 用 [/][/] 表达同样的意思，minifier 不会误判。
@@ -437,7 +437,7 @@ return view.extend({
 		   底部下拉追加预设。值就是 URL 本身，也可以直接回车输入。 */
 		o = ds.taboption('dns_advanced', form.DynamicList, 'ad_block_source', _('广告过滤规则来源'),
 			_('从下拉选预设，或直接输入列表 URL 回车。留空表示只用上面的 geosite 分类。' +
-			  '支持本地文件，如 file:///etc/honk_new/adblock.list'));
+			  '支持本地文件，如 file:///etc/honk/adblock.list'));
 		o.value('geosite.dat', 'v2ray-geosite（内置分类）');
 		o.value('https://anti-ad.net/domains.txt', 'anti-AD');
 		o.value('https://adrules.top/adblock.txt', 'AdRules');
@@ -459,10 +459,10 @@ return view.extend({
 			ui.showModal(_('更新广告规则'), [out, E('div', { 'class': 'right' },
 				E('button', { 'class': 'btn', 'click': ui.hideModal }, _('关闭')))]);
 			return uci.save().then(function() {
-				return fs.exec('/usr/share/honk_new/update-adblock.sh');
+				return fs.exec('/usr/share/honk/update-adblock.sh');
 			}).then(function(res) {
 				out.textContent = (res.stdout || '') + (res.stderr || '');
-				return fs.read('/etc/honk_new/adblock.list').catch(function() { return ''; });
+				return fs.read('/etc/honk/adblock.list').catch(function() { return ''; });
 			}).then(function(txt) {
 				var n = (txt || '').split('\n').filter(function(x) { return x.trim(); }).length;
 				out.textContent += '\n\n当前列表：' + n + ' 条';
@@ -472,22 +472,22 @@ return view.extend({
 		/* 自定义广告域名：写文件，生成器按 40 个一组拆成 domain(suffix:) 规则 */
 		o = ds.taboption('dns_advanced', form.TextValue, '_adblock_list', _('自定义广告域名'),
 			_('一行一个域名，按后缀匹配，所以 example.com 也覆盖 a.example.com。' +
-			  '存在 /etc/honk_new/adblock.list，与上面的 geosite 广告分类叠加生效。'));
+			  '存在 /etc/honk/adblock.list，与上面的 geosite 广告分类叠加生效。'));
 		o.rows = 10;
 		o.monospace = true;
 		o.cfgvalue = function() {
-			return fs.read('/etc/honk_new/adblock.list').catch(function() { return ''; });
+			return fs.read('/etc/honk/adblock.list').catch(function() { return ''; });
 		};
 		o.write = function(section_id, value) {
-			return fs.write('/etc/honk_new/adblock.list', String(value || ''));
+			return fs.write('/etc/honk/adblock.list', String(value || ''));
 		};
 		o.remove = function() {
-			return fs.write('/etc/honk_new/adblock.list', '');
+			return fs.write('/etc/honk/adblock.list', '');
 		};
 		o.placeholder = 'doubleclick.net\nads.example.com\ntracker.example.org';
 		/* ================= 访问控制 ================= */
 
-		var cv = s.taboption('control', form.SectionValue, '_control', form.NamedSection, 'control', 'honk_new');
+		var cv = s.taboption('control', form.SectionValue, '_control', form.NamedSection, 'control', 'honk');
 		var cs = cv.subsection;
 
 		o = cs.option(form.ListValue, 'lan_list_mode', _('局域网源地址策略'));
@@ -533,7 +533,7 @@ return view.extend({
 		dr.sortable = true;
 		dr.anonymous = true;
 		dr.sectiontitle = function(section_id) {
-			return uci.get('honk_new', section_id, 'name') || section_id;
+			return uci.get('honk', section_id, 'name') || section_id;
 		};
 
 		o = dr.option(form.Flag, 'enabled', _('启用'));
@@ -560,10 +560,10 @@ return view.extend({
 			var list = String(value || '').split('\n')
 				.map(function(v) { return v.trim(); })
 				.filter(function(v) { return v.length; });
-			uci.set('honk_new', section_id, 'domains', list);
+			uci.set('honk', section_id, 'domains', list);
 		};
 		o.cfgvalue = function(section_id) {
-			var v = uci.get('honk_new', section_id, 'domains');
+			var v = uci.get('honk', section_id, 'domains');
 			return Array.isArray(v) ? v.join('\n') : (v || '');
 		};
 		o.validate = function(section_id, value) {
@@ -585,18 +585,18 @@ return view.extend({
 		o = s.taboption('custom', form.TextValue, '_custom_rules', _('路由规则'),
 			_('写 routing { } 的内部内容，dae 语法，一行一条规则。' +
 			  '开关关闭时这里显示的是当前实际生效的规则，只读；开启后你写的内容会整段替换它们。' +
-			  '内容存在 /etc/honk_new/custom.rules 里，不走 UCI。'));
+			  '内容存在 /etc/honk/custom.rules 里，不走 UCI。'));
 		o.rows = 22;
 		o.monospace = true;
 		// 不隐藏：关掉开关时也要看得见现在跑的是什么，只是不能改
 		o.cfgvalue = function() {
-			return fs.read('/etc/honk_new/custom.rules').catch(function() { return ''; }).then(function(txt) {
+			return fs.read('/etc/honk/custom.rules').catch(function() { return ''; }).then(function(txt) {
 				if ((txt || '').trim().length)
 					return txt;
 
 				// 没写过自定义规则，就把生成出来的 routing 块摊开给人看。
 				// 这些是各路设置合出来的结果，不是用户输入的，所以只读展示。
-				return fs.read('/etc/honk_new/config.dae').then(function(dae) {
+				return fs.read('/etc/honk/config.dae').then(function(dae) {
 					var m = String(dae || '').match(/^routing[ \t]*\{([\s\S]*?)^\}/m);
 					if (!m) return '';
 					return m[1].replace(/^[ \t]{4}/gm, '').replace(/^\n+/, '').replace(/[ \t]+$/, '');
@@ -611,7 +611,7 @@ return view.extend({
 			var box = ta;
 			while (box && box.tagName !== 'FORM') box = box.parentNode;
 			var sync = function() {
-				var on = uci.get('honk_new', 'config', 'custom_rules_enabled') === '1';
+				var on = uci.get('honk', 'config', 'custom_rules_enabled') === '1';
 				ta.readOnly = !on;
 				ta.style.background = on ? '' : '#f2f2f2';
 				ta.style.color = on ? '' : '#666';
@@ -628,10 +628,10 @@ return view.extend({
 			return w;
 		};
 		o.write = function(section_id, value) {
-			return fs.write('/etc/honk_new/custom.rules', String(value || ''));
+			return fs.write('/etc/honk/custom.rules', String(value || ''));
 		};
 		o.remove = function() {
-			return fs.write('/etc/honk_new/custom.rules', '');
+			return fs.write('/etc/honk/custom.rules', '');
 		};
 		o.placeholder = [
 			'sip(188.181.1.0/24) -> proxy',

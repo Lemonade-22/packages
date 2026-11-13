@@ -8,7 +8,7 @@
 'require hk3';
 
 /*
- * luci-app-honk_new · 节点设置
+ * luci-app-honk · 节点设置
  *
  * 三块：
  *   节点  —— 手动添加的分享链接，以及当前生效的节点（含延迟/测试）
@@ -21,37 +21,38 @@
 return view.extend({
 	load: function() {
 		return Promise.all([
-			uci.load('honk_new'),
-			hk3.nodes().catch(function() { return []; }),
-			hk3.providers().catch(function() { return []; }),
-			hk3.api('groups').catch(function() { return []; })
+			uci.load('honk'),
+			hk3.nodes().catch(function(e) { return { error: e.message || String(e) }; }),
+			hk3.providers().catch(function(e) { return { error: e.message || String(e) }; }),
+			hk3.api('groups').catch(function(e) { return { error: e.message || String(e) }; })
 		]).then(function(res) {
-			var manual = uci.sections('honk_new', 'node').filter(function(n) {
+			var manual = uci.sections('honk', 'node').filter(function(n) {
 				return !n.subscription && (n.uri || '').length > 0;
 			}).map(function(n) {
 				return { id: n['.name'], name: n.name || n['.name'], uri: n.uri, enabled: n.enabled };
 			});
 
-			var groups = uci.sections('honk_new', 'group').map(function(g) {
+			var groups = uci.sections('honk', 'group').map(function(g) {
 				return (g.name || g['.name'] || '').trim();
 			}).filter(function(n) { return n.length > 0; });
 
 			return {
 				manual: manual,
-				runtime: res[1] || [],
-				providers: res[2] || [],
-				running: res[3] || [],
+				runtime: Array.isArray(res[1]) ? res[1] : [],
+				providers: Array.isArray(res[2]) ? res[2] : [],
+				running: Array.isArray(res[3]) ? res[3] : [],
+				loadErrors: [res[1], res[2], res[3]].filter(function(x) { return x && x.error; }).map(function(x) { return x.error; }),
 				groups: groups,
-				main: (uci.get('honk_new', 'config', 'main_group') || '').trim()
+				main: (uci.get('honk', 'config', 'main_group') || '').trim()
 			};
 		});
 	},
 
 	render: function(data) {
-		var m = new form.Map('honk_new', _('节点设置'),
+		var m = new form.Map('honk', _('节点设置'),
 			_('手动节点、分组定义与订阅。节点由内核解析，这里只负责把选择写进 UCI。'));
 
-		var s = m.section(form.NamedSection, 'config', 'honk_new');
+		var s = m.section(form.NamedSection, 'config', 'honk');
 		s.anonymous = true;
 
 		// 照 HomeProxy 图11 的做法：每个订阅单独一个 tab。
@@ -72,7 +73,7 @@ return view.extend({
 		// 「节点」里面再分一排 tab：手动节点 + 每个订阅。
 		// 用 SectionValue 的 subsection 声明，跟 DNS 那边（基础/DNS服务器/高级）同一个套路，
 		// 是 LuCI 原生支持的嵌套 tab，不用自己画。
-		var pane = s.taboption('nodes', form.SectionValue, '_nodepane', form.NamedSection, 'config', 'honk_new');
+		var pane = s.taboption('nodes', form.SectionValue, '_nodepane', form.NamedSection, 'config', 'honk');
 		var ns = pane.subsection;
 
 		ns.tab('manual', _('手动节点'));
@@ -84,11 +85,11 @@ return view.extend({
 		nodesSec.sortable = true;
 		nodesSec.anonymous = true;
 		nodesSec.sectiontitle = function(section_id) {
-			return uci.get('honk_new', section_id, 'name') || section_id;
+			return uci.get('honk', section_id, 'name') || section_id;
 		};
 		// 订阅节点由内核拉取，不进这张表
 		nodesSec.filter = function(section_id) {
-			return !uci.get('honk_new', section_id, 'subscription');
+			return !uci.get('honk', section_id, 'subscription');
 		};
 
 		nodesSec.renderSectionAdd = function() {
@@ -115,7 +116,7 @@ return view.extend({
 								if (!links.length) return ui.hideModal();
 
 								var used = {};
-								uci.sections('honk_new', 'node').forEach(function(n) { if (n.name) used[n.name] = 1; });
+								uci.sections('honk', 'node').forEach(function(n) { if (n.name) used[n.name] = 1; });
 
 								var added = 0, idx = 0;
 								links.forEach(function(link) {
@@ -124,15 +125,15 @@ return view.extend({
 										try { name = decodeURIComponent(link.slice(h + 1)); }
 										catch (e) { name = link.slice(h + 1); }
 									}
-									name = name.replace(/[^\w.-]/g, '').slice(0, 24);
+									name = name.replace(/[\r\n]/g, '').trim();
 									if (!name) name = 'node';
 									while (used[name]) name = name.replace(/\d+$/, '') + (++idx);
 									used[name] = 1;
 
-									var sid = uci.add('honk_new', 'node');
-									uci.set('honk_new', sid, 'enabled', '1');
-									uci.set('honk_new', sid, 'name', name);
-									uci.set('honk_new', sid, 'uri', link);
+									var sid = uci.add('honk', 'node');
+									uci.set('honk', sid, 'enabled', '1');
+									uci.set('honk', sid, 'name', name);
+									uci.set('honk', sid, 'uri', link);
 									added++;
 								});
 
@@ -178,11 +179,11 @@ return view.extend({
 		groupsSec.sortable = true;
 		groupsSec.anonymous = true;
 		groupsSec.sectiontitle = function(section_id) {
-			return uci.get('honk_new', section_id, 'name') || section_id;
+			return uci.get('honk', section_id, 'name') || section_id;
 		};
 		groupsSec.renderRow = function(section_id) {
 			var tr = form.GridSection.prototype.renderRow.apply(this, arguments);
-			var name = (uci.get('honk_new', section_id, 'name') || '').trim();
+			var name = (uci.get('honk', section_id, 'name') || '').trim();
 			if (!name) return tr;
 
 			// 「应用」= 把这个组设成主分组。honk 没有单一主节点，路由目标是组。
@@ -191,7 +192,7 @@ return view.extend({
 				'style': 'padding:2px 10px;font-size:12px;',
 				'click': ui.createHandlerFn(this, function(ev) {
 					ev.preventDefault();
-					uci.set('honk_new', 'config', 'main_group', name);
+					uci.set('honk', 'config', 'main_group', name);
 					return uci.save().then(function() {
 						ui.addNotification(null, E('p', {}, _('主分组已设为 %s，保存并应用后生效。').format(name)), 'info');
 						var cell = td.querySelector('button');
@@ -267,7 +268,7 @@ return view.extend({
 		o.description = _('选节点或别的组。留空表示这个组暂时不含任何成员（不会自动包含全部节点）。');
 
 		o = groupsSec.option(form.DynamicList, 'providers', _('订阅成员'));
-		uci.sections('honk_new', 'subscription').filter(function(x) { return x.enabled === '1'; }).forEach(function(x) {
+		uci.sections('honk', 'subscription').filter(function(x) { return x.enabled === '1'; }).forEach(function(x) {
 			var tag = x.tag || x.name || x['.name'];
 			o.value(tag, tag);
 		});
@@ -319,7 +320,7 @@ return view.extend({
 		subsSec.sortable = true;
 		subsSec.anonymous = true;
 		subsSec.sectiontitle = function(section_id) {
-			return uci.get('honk_new', section_id, 'name') || section_id;
+			return uci.get('honk', section_id, 'name') || section_id;
 		};
 
 		o = subsSec.option(form.Flag, 'enabled', _('启用'));
@@ -376,6 +377,8 @@ return view.extend({
 
 		return m.render().then(function(el) {
 			hk3.mountStatusBanner(el);
+			hk3.layoutFullRows(el);
+			if (data.loadErrors.length) ui.addNotification(null, E('p', {}, _('运行时数据读取失败：') + data.loadErrors.join('; ')), 'error');
 
 			// fullRow 在 cfgvalue 里执行时元素还没进 DOM，往上找不到 .cbi-value，
 			// 宽度那一步只能等渲染完再做。不设的话表格被 <output> 固定成 400px，
@@ -388,7 +391,6 @@ return view.extend({
 
 			// m.render() 只生成表单本身，主题的 .cbi-page-actions 是在这之后
 			// 才挂上去的，所以这里立刻找是找不到的，得等一帧。
-			window.setTimeout(function() { mountTestAll(el); }, 0);
 			return el;
 		});
 	}
@@ -399,30 +401,6 @@ return view.extend({
  * LuCI 的 .cbi-value 是两列布局（标签 30% / 内容 70%），表格塞在右列里会
  * 明显缩进，跟上面 GridSection 的表头对不齐。这里把标签列藏掉、内容列拉满。
  */
-function fullRow(node) {
-	node.style.width = '100%';
-
-	// 往上找到 .cbi-value 那一行，把标签列收掉、内容列拉满。
-	// 内容是 DummyValue 渲染出来的，它落在 <output> 里，而不是 .cbi-value-field，
-	// 所以不能只处理那一个 class —— 得把它下面的直接子元素都铺开。
-	var row = node;
-	while (row && !(row.classList && row.classList.contains('cbi-value')))
-		row = row.parentNode;
-
-	if (row) {
-		var title = row.querySelector('.cbi-value-title');
-		if (title) title.style.display = 'none';
-
-		Array.prototype.forEach.call(row.children, function(child) {
-			if (child === title) return;
-			child.style.width = '100%';
-			child.style.marginLeft = '0';
-			child.style.flex = '1 1 auto';
-			child.style.minWidth = '0';
-		});
-	}
-	return node;
-}
 
 /*
  * 页面底部左侧的「测试所有节点」，测的是当前显示的那个列表 ——
@@ -431,77 +409,6 @@ function fullRow(node) {
  * 串行而不并发：71 个节点同时探，路由器的 conntrack 和出口会被打满，
  * 结果全变超时，反而看不出哪个节点是好的。
  */
-function mountTestAll(el) {
-	// .cbi-page-actions 不在 #cbi-honk_new 里面，是主题在 map 外面单独放的，
-	// 所以不能从 el 往下找。
-	var actions = document.querySelector('.cbi-page-actions');
-	if (!actions) {
-		// 主题可能还没把按钮区挂上，再等一轮
-		window.setTimeout(function() { mountTestAll(el); }, 200);
-		return;
-	}
-
-	// 固定宽度：进度文字比标题短，不固定的话旁边「保存」「重置」会跟着左右跳。
-	var btn = E('button', {
-		'class': 'btn cbi-button',
-		'style': 'margin-right:8px;min-width:9.5em;text-align:center;' +
-		         'font-variant-numeric:tabular-nums'
-	}, _('测试所有节点'));
-
-	var running = false;
-
-	btn.addEventListener('click', function(ev) {
-		ev.preventDefault();
-		if (running) return;
-
-		// 只取当前可见的那个列表里的测试按钮
-		var panes = Array.prototype.slice.call(el.querySelectorAll('[id^="cbi-honk_new-config-_nodes_"]'));
-		var pane = panes.filter(function(p) { return p.offsetParent !== null; })[0];
-		if (!pane) return;
-
-		var probes = Array.prototype.slice.call(pane.querySelectorAll('button.honk-probe'));
-		if (!probes.length) return;
-
-		running = true;
-		var i = 0;
-		var label = btn.textContent;
-
-		btn.disabled = true;
-		btn.textContent = _('测试中 0/') + probes.length;
-
-		function step() {
-			if (i >= probes.length) {
-				running = false;
-				btn.disabled = false;
-				btn.textContent = label;
-				return;
-			}
-			btn.textContent = _('测试中 ') + (i + 1) + '/' + probes.length;
-
-			// 单行按钮自己知道怎么测，这里只管按顺序点，等它把结果写回单元格
-			var cell = probes[i].parentNode.previousSibling;
-			var before = cell ? cell.textContent : '';
-			probes[i].click();
-			i++;
-
-			var waited = 0;
-			(function poll() {
-				var now = cell ? cell.textContent : '';
-				// 单元格离开「测试中…」就算有结果了；最多等 12 秒
-				if ((now !== before && now.indexOf(_('测试中')) < 0) || waited > 60) {
-					step();
-				} else {
-					waited++;
-					setTimeout(poll, 200);
-				}
-			})();
-		}
-
-		step();
-	});
-
-	actions.insertBefore(btn, actions.firstChild);
-}
 
 /*
  * 点表头排序。没测过的节点永远排在最后——不管是升序还是降序，
@@ -573,10 +480,13 @@ function renderProviderNodes(data, tag) {
 
 	// 只有两列有意义：延迟和测试。类型/地址/订阅在单订阅 tab 里是冗余的，
 	// 但保留「类型」方便一眼看出协议，其余两列去掉。
-	// separate + spacing 0：让边框长在单元格自己身上，sticky 表头才不会丢边框。
-	// 用 collapse 的话边框归 table，一旦 th 提升成 sticky 就看不见了。
+	// 主题给 .table 设了 12px 圆角 + 上边框，这两样都在滚动容器里帮倒忙：
+	// 圆角把四角的边框裁成透明，上边框画在 table 上、th 吸顶滚走后它留在原地，
+	// 看起来就是「横线要滚到头才出现」。这里把 table 自己的框和圆角全清掉，
+	// 边框只由单元格提供 —— separate 下每个 th/td 都能带自己的边框。
 	var table = E('table', { 'class': 'table',
-		'style': 'width:100%;border-collapse:separate;border-spacing:0' },
+		'style': 'width:100%;border-collapse:separate;border-spacing:0;' +
+		         'border:0;border-radius:0;background:transparent' },
 		E('tr', { 'class': 'tr table-titles' },
 			[{ t: _('名称'), k: 'name' }, { t: _('延迟'), k: 'latency' },
 			 { t: _('测试'), k: null }, { t: _('类型'), k: 'type' }].map(function(col) {
@@ -612,59 +522,66 @@ function renderProviderNodes(data, tag) {
 		return E('div', {}, table);
 	}
 
-	rows.slice(0, 200).forEach(function(n) {
+	rows.forEach(function(n) {
 		// 固定宽度：单元格内容在「未测 / 测试中… / 223 ms」之间切换，
 		// 自适应宽度会让整列跟着一抽一抽。
-		var cell = E('td', { 'class': 'td', 'style': 'width:110px;font-variant-numeric:tabular-nums' }, _('未测'));
-		var btn = E('button', { 'class': 'btn honk-probe', 'style': 'padding:1px 8px;font-size:12px',
+		var cell = E('td', { 'class': 'td', 'style':
+			'width:110px;font-variant-numeric:tabular-nums;' +
+			'border-bottom:1px solid rgba(0,0,0,.08);padding:8px 10px' }, _('未测'));
+		var btn = E('button', { 'class': 'btn cbi-button honk-probe',
 			'data-node': n.id }, _('测试'));
 		var addr = n.address || (n.server || '') + (n.port ? ':' + n.port : '');
 
-		var h = (n.health || []).filter(function(x) { return x.purpose === 'data' && x.state === 'healthy'; })[0];
-		if (h && typeof h.latency_ms === 'number') {
-			cell.textContent = Math.round(h.latency_ms) + ' ms';
-			cell.style.color = 'green';
-		}
-
-		btn.addEventListener('click', function(ev) {
-			ev.preventDefault();
-			if (btn.disabled) return;
-			btn.disabled = true;
-			cell.textContent = _('测试中…');
-			cell.style.color = 'gray';
-
-			hk3.api('probe', JSON.stringify({ node_id: n.id, timeout_ms: 6000 }))
-				.then(function(r) {
-					var ms = r && (r.latency_ms != null ? r.latency_ms : (r.result && r.result.latency_ms));
-					if (typeof ms === 'number') {
-						cell.textContent = Math.round(ms) + ' ms';
-						cell.style.color = 'green';
-					} else {
-						cell.textContent = _('失败');
-						cell.style.color = 'red';
-					}
-				})
-				.catch(function() {
-					cell.textContent = _('失败');
-					cell.style.color = 'red';
-				})
+		var h = hk3.health(n, 'tcp', 'ipv4');
+		cell.textContent = h.label;
+		cell.title = _('TCP / IPv4 数据探测');
+		if (h.state === 'healthy') cell.style.color = 'green';
+		else if (h.state === 'unavailable') cell.style.color = 'red';
+		btn.runProbe = function() {
+			if (btn.disabled) return Promise.resolve();
+			btn.disabled = true; cell.textContent = _('测试中…'); cell.style.color = 'gray';
+			return hk3.api('probe', JSON.stringify({ target: { type: 'node', node_id: n.id }, kind: 'http', transport: ['tcp'], ip_version: 'ipv4', warmth: 'cold' }))
+				.then(hk3.waitOperation).then(function(result) {
+					var sample = (result.results || [])[0];
+					if (!sample) throw new Error(_('内核未返回测试结果'));
+					var ok = sample.state === 'healthy' && typeof sample.latency_ms === 'number';
+					cell.textContent = ok ? Math.round(sample.latency_ms) + ' ms' : (sample.state === 'unavailable' ? _('不可用') : _('未测'));
+					cell.style.color = ok ? 'green' : 'red';
+					cell.title = _('TCP / IPv4 HTTP 测试') + (sample.error ? ': ' + sample.error : '');
+					tr.setAttribute('data-latency', ok ? String(sample.latency_ms) : 'Infinity');
+				}).catch(function(e) { cell.textContent = _('测试失败'); cell.style.color = 'red'; cell.title = e.message || String(e); })
 				.finally(function() { btn.disabled = false; });
-		});
+		};
+		btn.addEventListener('click', function(ev) { ev.preventDefault(); btn.runProbe(); });
 
+		// separate 模式下每个单元格得自己带边框，不然行线全没了
+		var TD = 'border-bottom:1px solid rgba(0,0,0,.08);padding:8px 10px';
 		var tr = E('tr', { 'class': 'tr' }, [
-			E('td', { 'class': 'td' }, n.name || n.id),
+			E('td', { 'class': 'td', 'style': TD }, n.name || n.id),
 			cell,
-			E('td', { 'class': 'td' }, btn),
-			E('td', { 'class': 'td' }, n.protocol || '-')
+			E('td', { 'class': 'td', 'style': TD }, btn),
+			E('td', { 'class': 'td', 'style': TD }, n.protocol || '-')
 		]);
 		// 排序用的原始值。延迟用数字，没测过的记成 Infinity 好让它排最后。
 		tr.setAttribute('data-name', n.name || n.id);
 		tr.setAttribute('data-type', n.protocol || '');
 		tr.setAttribute('data-latency',
-			(h && typeof h.latency_ms === 'number') ? String(Math.round(h.latency_ms)) : 'Infinity');
+			h.latency != null ? String(h.latency) : 'Infinity');
 		table.appendChild(tr);
 	});
 
 	bindSort(table);
-	return fullRow(E('div', { 'style': 'width:100%;max-height:32em;overflow:auto;position:relative' }, table));
+	var bulk = E('button', { 'class': 'btn cbi-button', click: function(ev) {
+		ev.preventDefault();
+		if (bulk.disabled) return;
+		var buttons = Array.prototype.slice.call(table.querySelectorAll('button.honk-probe'));
+		var index = 0; bulk.disabled = true;
+		function next() {
+			if (index >= buttons.length) { bulk.disabled = false; bulk.textContent = _('测试当前列表'); return; }
+			bulk.textContent = _('测试中 ') + (index + 1) + '/' + buttons.length;
+			Promise.resolve(buttons[index++].runProbe()).then(next, next);
+		}
+		next();
+	} }, _('测试当前列表'));
+	return hk3.fullRow(E('div', {}, [E('p', {}, [bulk, ' ', _('节点数：') + rows.length]), E('div', { 'style': 'width:100%;max-height:32em;overflow:auto;position:relative' }, table)]));
 }

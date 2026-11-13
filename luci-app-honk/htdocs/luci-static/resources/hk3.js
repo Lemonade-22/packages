@@ -5,6 +5,11 @@
 'require rpc';
 'require ui';
 
+// 网络设备的权威来源就是 ubus 的 network.device，LuCI 的「网络 → 设备」页
+// 用的也是它。fs.read('/proc/net/dev') 走不通——ACL 不给 /proc 下的路径，
+// 而且那儿只有名字，没有「是不是网桥」这种信息。
+var deviceStatus = rpc.declare({ object: 'network.device', method: 'status', expect: { '': {} } });
+
 var connectionCheck = rpc.declare({ object: 'luci.honk', method: 'connection_check', params: ['site'], expect: { '': {} } });
 
 /* 只读动作走 honk-read.sh：ACL 把它放在 read 权限里，未登录或只读身份
@@ -90,13 +95,87 @@ function renderConnection() {
 }
 
 
+/*
+ * 让 DummyValue 的内容占满整行。
+ * LuCI 的 .cbi-value 是标签 30% / 内容 70% 的两列布局，表格塞在右列会明显
+ * 缩进，跟上面的 GridSection 表头对不齐。这里藏掉标签列、内容列拉满。
+ */
+function fullRow(node) {
+	node.classList.add('honk-full-row');
+	return node;
+}
+function layoutFullRows(root) {
+	root.querySelectorAll('.honk-full-row').forEach(function(node) {
+		var row = node.closest('.cbi-value');
+		if (!row) return;
+		var title = row.querySelector('.cbi-value-title');
+		if (title) title.style.display = 'none';
+		Array.prototype.forEach.call(row.children, function(child) {
+			if (child === title) return;
+			child.style.width = '100%'; child.style.marginLeft = '0';
+			child.style.flex = '1 1 auto'; child.style.minWidth = '0';
+		});
+	});
+}
+
 /* 已生效的原生订阅。honk 自己解析订阅，这里只展示内核的实际状态，
    不重复前端那套下载/解析逻辑。 */
+/*
+ * 顶部运行状态条。三个页面都要有，所以放在共用模块里，
+ * 位置照 HomeProxy —— 挂在副标题（.cbi-map-descr）下面，不是页面最顶上。
+ */
+function mountStatusBanner(el) {
+	var banner = E('div', {
+		'style': 'padding:8px 0;margin:0 0 10px;font-weight:600;font-size:14px;' +
+		         'font-style:italic;color:#d9534f;border-bottom:1px solid #ddd;'
+	}, _('正在读取 honk 状态…'));
+
+	function refresh() {
+		return fs.exec('/usr/share/honk/honk-status.sh').then(function(res) {
+			var parts = String(res.stdout || '').trim().split('|');
+			var state = parts[0] || 'missing';
+			var ver = (parts[1] || '').trim();
+			var label = ver ? 'honk-core ' + ver : 'honk-core';
+
+			if (state === 'running') {
+				banner.style.color = '#19be6b';
+				banner.textContent = label + ' ' + _('运行中');
+			} else if (state === 'stopped') {
+				banner.style.color = '#ed4014';
+				banner.textContent = label + ' ' + _('未运行');
+			} else {
+				banner.style.color = '#ff9900';
+				banner.textContent = _('honk-core 未安装');
+			}
+		}).catch(function(e) {
+			banner.style.color = '#ff9900';
+			banner.textContent = _('无法读取状态：') + e;
+		});
+	}
+
+	refresh();
+	poll.add(function() { if (!banner.isConnected) return; return refresh(); }, 10);
+
+	var anchor = el.querySelector('.cbi-map-descr');
+	if (anchor && anchor.nextSibling)
+		el.insertBefore(banner, anchor.nextSibling);
+	else if (anchor)
+		el.appendChild(banner);
+	else
+		el.insertBefore(banner, el.firstChild);
+
+	banner.insertAdjacentElement('afterend', renderApplyStatus());
+	return banner;
+}
+
 function renderProviders() {
 	var box = E('div', { style: 'line-height:1.8' }, _('正在读取已生效订阅…'));
 
 	function check() {
-		return page('providers').then(function(list) {
+		return page('providers').then(function(all) {
+			// inline 是 honk 的虚拟 provider，装的是手动节点，不是订阅。
+			// 文档明确它不可刷新也不可删除。列在这里只会让人以为订了却没节点。
+			var list = (all || []).filter(function(p) { return p.kind !== 'inline'; });
 			box.innerHTML = '';
 
 			if (!list.length) {
@@ -112,9 +191,18 @@ function renderProviders() {
 					})));
 
 			list.forEach(function(p) {
-				var state = E('strong', {}, p.status || _('未知'));
-				if (p.status === 'healthy' || p.status === 'ok')
+				var STATE_TEXT = {
+					ok: _('正常'),
+					stale: _('已过期'),
+					failed: _('拉取失败'),
+					error: _('出错'),
+					refreshing: _('更新中')
+				};
+				var state = E('strong', {}, STATE_TEXT[p.status] || p.status || _('未知'));
+				if (p.status === 'ok')
 					state.style.color = 'green';
+				else if (p.status === 'stale' || p.status === 'refreshing')
+					state.style.color = '#ff9900';
 				else if (p.status === 'failed' || p.status === 'error')
 					state.style.color = 'red';
 
@@ -142,7 +230,7 @@ function renderProviders() {
 					E('td', { class: 'td' }, p.kind || '-'),
 					E('td', { class: 'td' }, String(p.node_count != null ? p.node_count : '-')),
 					E('td', { class: 'td' }, state),
-					E('td', { class: 'td', style: 'word-break:break-all;color:#c00' }, p.last_error || ''),
+					E('td', { class: 'td', style: 'word-break:break-all;color:#c00' }, (p.last_error && (p.last_error.message || p.last_error.code)) || ''),
 					E('td', { class: 'td' }, btn)
 				]));
 			});
@@ -154,8 +242,8 @@ function renderProviders() {
 	}
 
 	check();
-	poll.add(check, 20);
-	return box;
+	poll.add(function() { if (!box.isConnected) return; return check(); }, 20);
+	return fullRow(box);
 }
 
 /* 分组与当前选择。GET /groups 只给摘要，成员要单独读 /groups/{id}。 */
@@ -262,8 +350,8 @@ function renderPicking() {
 	}
 
 	check();
-	poll.add(check, 30);
-	return box;
+	poll.add(function() { if (!box.isConnected) return; return check(); }, 30);
+	return fullRow(box);
 }
 
 /* 让内核重新加载已保存的配置。走原生 API，拿到 operation 才代表真的完成。 */
@@ -275,8 +363,7 @@ function reload() {
 
 /* 上一轮应用的结局。init 脚本把结果写进 /var/run/honk/。 */
 function renderApplyStatus() {
-	var box = E('div', { style: 'margin:10px 0;padding:8px 12px;border-radius:4px;' +
-		'border:1px solid #ddd;font-size:13px;background:#fafafa' }, '');
+	var box = E('div', { 'class': 'cbi-value-description', style: 'margin:4px 0 10px' }, '');
 
 	var TEXT = {
 		starting: [_('启动中'), '#ff9900'],
@@ -301,17 +388,20 @@ function renderApplyStatus() {
 			if (!apply) {
 				label = _('还没有应用记录');
 				color = '#888';
-			} else if (apply.status) {
+			} else if (apply.status && !apply.operation_id) {
 				var t = TEXT[apply.status];
 				label = t ? t[0] : apply.status;
 				color = t ? t[1] : '#888';
 			} else if (apply.operation_id || apply.state) {
 				// reload 成功时 init 写的是原生 API 的返回体
-				label = _('配置已生效');
-				color = '#19be6b';
+				label = _('配置重载已受理，正在查询结果');
+				color = '#888';
+				if (apply.operation_id) api('operation', apply.operation_id).then(function(op) {
+					box.textContent = op.status === 'succeeded' ? _('配置已生效') : (op.status === 'failed' ? _('配置重载失败：') + ((op.error || {}).message || '') : _('配置重载中'));
+				}).catch(function() { box.textContent = _('无法确认配置重载结果'); });
 			} else {
-				label = _('已应用');
-				color = '#19be6b';
+				label = _('无法确认配置应用结果');
+				color = '#888';
 			}
 
 			box.appendChild(E('span', { style: 'color:' + color + ';font-weight:600' }, label));
@@ -329,10 +419,11 @@ function renderApplyStatus() {
 	}
 
 	check();
-	poll.add(check, 10);
+	poll.add(function() { if (!box.isConnected) return; return check(); }, 10);
 	return box;
 }
 
-return baseclass.extend({ api: api, nodes: function() { return page('nodes'); }, providers: function() { return page('providers'); },
+return baseclass.extend({ api: api, deviceStatus: function() { return deviceStatus(); }, nodes: function() { return page('nodes'); }, providers: function() { return page('providers'); },
 	waitOperation: waitOperation, health: health, renderConnection: renderConnection,
-	renderProviders: renderProviders, renderPicking: renderPicking, reload: reload, renderApplyStatus: renderApplyStatus });
+	renderProviders: renderProviders, renderPicking: renderPicking, reload: reload, renderApplyStatus: renderApplyStatus,
+	mountStatusBanner: mountStatusBanner, fullRow: fullRow, layoutFullRows: layoutFullRows });

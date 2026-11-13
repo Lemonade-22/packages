@@ -2,9 +2,14 @@
 
 config honk 'config'
 	option enabled '0'
-	option main_group 'nil'
+	# 指向下面那个示例组。装完把节点塞进 proxy 组、打开开关就能用，
+	# 不用先想清楚"主分组该填谁"。
+	option main_group 'proxy'
 	option routing_mode 'bypass_mainland_china'
-	option routing_port 'common'
+	# 空 = 所有端口都走代理规则，兜底 fallback 才是 proxy。
+	# 填 common 会变成"只代理常用端口、其余直连"，那是有意为之的白名单模式，
+	# 不适合当默认值——会让 P2P、游戏、非标端口全部绕过代理。
+	option routing_port ''
 	option ipv6_mode 'block'
 	option quic_mode 'block'
 	option custom_rules_enabled '0'
@@ -14,7 +19,9 @@ config honk 'config'
 config honk 'infra'
 	option data_dir '/var/lib/honk'
 	option log_level 'info'
-	option bootstrap_resolver '1.1.1.1:53'
+	# 只用来解析节点域名和 DNS 上游域名，必须选国内能通的。
+	# 1.1.1.1 在墙内经常连不上，那会让节点域名解析失败、整个代理起不来。
+	option bootstrap_resolver '223.5.5.5:53'
 	option geo_asset_dir '/usr/share/honk/geo'
 # 首次安装留空给用户自己选；br-lan 不存在时这里不填
 	option lan_interface 'br-lan'
@@ -59,6 +66,15 @@ config group 'proxy'
 	option check_url 'http://1.1.1.1'
 	option tolerance '50'
 	option final 'block'
+	# 机场塞在订阅开头的占位节点：有连接参数但连不上，不滤掉自动选优会挑它们
+	option filter_nodes 'blacklist'
+	list filter_keywords '剩余流量'
+	list filter_keywords '套餐到期'
+	list filter_keywords '距离下次'
+	list filter_keywords '过期时间'
+	list filter_keywords '官网'
+	list filter_keywords 'Traffic'
+	list filter_keywords 'Expire'
 
 # 订阅：下载后解析成节点，节点名会带上 tag 前缀
 config subscription 'example_sub'
@@ -66,6 +82,9 @@ config subscription 'example_sub'
 	option name 'sample'
 	option url ''
 	option tag 'sub'
+	# 空 = 用内核默认 honk/<版本>；下拉选「自定义」时值取下面这一项
+	option user_agent ''
+	option user_agent_custom ''
 
 # 访问控制：按源/目标地址决定走代理还是直连
 config control 'control'

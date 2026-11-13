@@ -39,7 +39,9 @@ for (let s in sections('subscription')) {
 	if (route !== 'direct' && route !== 'routing' && !group_names[route])
 		die('Unknown subscription outbound\n');
 	printf('    %s: %s {\n        interval: %ss\n        cache: true\n        route: %s\n', quote(tag), quote(s.url), interval, route);
-	if (s.user_agent) printf('        ua: %s\n', quote(s.user_agent));
+	// user_agent 是预设下拉，选 custom 时真正的值在 user_agent_custom
+	let ua = (s.user_agent === 'custom') ? (s.user_agent_custom || '') : (s.user_agent || '');
+	if (ua) printf('        ua: %s\n', quote(ua));
 	print('    }\n');
 }
 print('}\nnode {\n');
@@ -58,14 +60,54 @@ for (let g in groups) {
 	const policy = g.policy || 'urltest';
 	if (!(policy in ['selector', 'urltest', 'score', 'loadbalance', 'fallback'])) die('Unknown group policy\n');
 	printf('    %s {\n', g.name);
-	for (let member in list(g.members)) {
-		if (member === g.name) die('A group cannot contain itself\n');
-		printf('        filter: %s(%s)\n', group_names[member] ? 'group' : 'name', quote(member));
+
+	// 订阅节点里常混着「剩余流量」「套餐到期」这类占位节点：
+	// 连接参数是真的，但根本连不上，自动选优会挑到它们。
+	// 三种模式，跟 HomeProxy 的过滤器一致：
+	//   disabled  不过滤
+	//   blacklist 命中关键词的丢掉
+	//   whitelist 只保留命中关键词的
+	//
+	// honk 里多条 filter: 行是 OR，&& 是 AND，|| 不支持（实测解析成空集）。
+	// 所以白名单要拆成每个关键词一行；黑名单的排除条件必须 && 挂到每一行上，
+	// 只挂第一行的话，后面的行会把被排除的节点又带回来。
+	const mode = g.filter_nodes || 'disabled';
+	const kws = [];
+	for (let w in list(g.filter_keywords)) {
+		if (length(w) === 0) continue;
+		push(kws, w);
 	}
-	for (let tag in list(g.providers)) {
-		if (!providers[tag]) die('Group refers to a disabled or missing subscription\n');
-		printf('        filter: subtag(%s)\n', quote(tag));
+
+	let neg = '';
+	if (mode === 'blacklist') {
+		for (let w in kws)
+			neg += ' && !name(keyword: ' + quote(w) + ')';
 	}
+
+	let lines = [];
+	if (mode === 'whitelist' && length(kws) > 0) {
+		// 白名单：这个组只含命中关键词的节点，不再看成员和订阅
+		for (let w in kws)
+			push(lines, 'name(keyword: ' + quote(w) + ')');
+	} else {
+		for (let member in list(g.members)) {
+			if (member === g.name) die('A group cannot contain itself\n');
+			push(lines, (group_names[member] ? 'group(' : 'name(') + quote(member) + ')');
+		}
+		for (let tag in list(g.providers)) {
+			if (!providers[tag]) die('Group refers to a disabled or missing subscription\n');
+			push(lines, 'subtag(' + quote(tag) + ')');
+		}
+	}
+
+	// honk 对没有任何 filter 的组按「包含全部节点」处理。那不是我们要的默认：
+	// 新建一个组、还没选成员，它就已经把整份订阅吞进去了。
+	if (length(lines) === 0)
+		push(lines, "name('__honk_no_members__')");
+
+	for (let e in lines)
+		printf('        filter: %s%s\n', e, neg);
+
 	printf('        policy: %s\n', policy);
 	if (g.check_url) printf('        check_url: %s\n', quote(g.check_url));
 	if (g.tolerance) {
