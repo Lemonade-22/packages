@@ -56,21 +56,29 @@ return view.extend({
 
 		// 照 HomeProxy 图11 的做法：每个订阅单独一个 tab。
 		// tab 名优先用订阅名，没起名就用 URL 主机名，再不行用链接前 24 个字符。
+		// 「节点」里再分一排 tab：手动节点 + 每个订阅。
 		var subTabs = [];
 		(data.providers || []).forEach(function(p) {
-			if (p.kind === 'inline') return;   // 手动节点归「节点」tab，不重复列
-			var tag = p.name || p.id;
-			subTabs.push({ id: 'sub' + subTabs.length, label: subLabel(p, subTabs.length), tag: tag });
+			if (p.kind === 'inline') return;   // 手动节点不重复列
+			subTabs.push({ id: 'sub' + subTabs.length, label: subLabel(p, subTabs.length), tag: p.name || p.id });
 		});
 
 		s.tab('nodes', _('节点'));
-		subTabs.forEach(function(t) { s.tab(t.id, t.label); });
 		s.tab('groups', _('分组'));
 		s.tab('subs', _('订阅'));
 
 		/* ================= 节点 ================= */
 
-		var nv = s.taboption('nodes', form.SectionValue, '_manual_nodes', form.GridSection, 'node', _('手动节点'));
+		// 「节点」里面再分一排 tab：手动节点 + 每个订阅。
+		// 用 SectionValue 的 subsection 声明，跟 DNS 那边（基础/DNS服务器/高级）同一个套路，
+		// 是 LuCI 原生支持的嵌套 tab，不用自己画。
+		var pane = s.taboption('nodes', form.SectionValue, '_nodepane', form.NamedSection, 'config', 'honk_new');
+		var ns = pane.subsection;
+
+		ns.tab('manual', _('手动节点'));
+		subTabs.forEach(function(t) { ns.tab(t.id, t.label); });
+
+		var nv = ns.taboption('manual', form.SectionValue, '_manual_nodes', form.GridSection, 'node', null);
 		var nodesSec = nv.subsection;
 		nodesSec.addremove = true;
 		nodesSec.sortable = true;
@@ -157,7 +165,7 @@ return view.extend({
 
 		// 每个订阅的节点表，放在它自己的 tab 里
 		subTabs.forEach(function(t) {
-			var opt = s.taboption(t.id, form.DummyValue, '_nodes_' + t.id, _('节点列表'));
+			var opt = ns.taboption(t.id, form.DummyValue, '_nodes_' + t.id, null);
 			opt.rawhtml = true;
 			opt.cfgvalue = function() { return renderProviderNodes(data, t.tag); };
 		});
@@ -339,6 +347,7 @@ return view.extend({
 
 		return m.render().then(function(el) {
 			hk3.mountStatusBanner(el);
+
 			return el;
 		});
 	}
