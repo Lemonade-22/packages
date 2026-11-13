@@ -156,7 +156,7 @@ return view.extend({
 		o.rmempty = false;
 
 		// 每个订阅的节点表，放在它自己的 tab 里
-		(self._subTabs || []).forEach(function(t) {
+		subTabs.forEach(function(t) {
 			var opt = s.taboption(t.id, form.DummyValue, '_nodes_' + t.id, _('节点列表'));
 			opt.rawhtml = true;
 			opt.cfgvalue = function() { return renderProviderNodes(data, t.tag); };
