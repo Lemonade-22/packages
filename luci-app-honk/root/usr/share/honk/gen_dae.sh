@@ -149,7 +149,18 @@ mkdir -p "$(dirname "$OUT")"
     # 必须用 direct(must)：普通 direct 只是选直连出口，DNS 仍归 honk 接管，
     # 管理连接照样会被卷进去。must 才会立即终结规则搜索、跳过 DNS 控制器。
     # 排除 53 是有意的——那一路继续走 honk 做透明 DNS。
-    echo "    sip(${net:-$lan_cidr}) && dip($lan_ip) && !dport(53) -> direct(must)"
+    #
+    # honk 会检查"每个本机地址是否都被放行过"，漏一个就报 self-protection
+    # coverage could not be confirmed。所以这里把所有本地地址都枚举一遍，
+    # 不能只写 LAN 那个 IPv4。
+    _src="${net:-$lan_cidr}"
+    _local="$(ip -4 -o addr show 2>/dev/null | awk '{print $4}' | cut -d/ -f1)
+$(ip -6 -o addr show scope global 2>/dev/null | awk '{print $4}' | cut -d/ -f1)"
+    echo "$_local" | while IFS= read -r _a; do
+      [ -n "$_a" ] || continue
+      case "$_a" in 127.*|::1) continue ;; esac
+      echo "    sip($_src) && dip($_a) && !dport(53) -> direct(must)"
+    done
   fi
   # 路由器自己发起的 DNS 查询不能被绕回 honk，否则成环
   echo "    pname(dnsmasq) -> direct"
