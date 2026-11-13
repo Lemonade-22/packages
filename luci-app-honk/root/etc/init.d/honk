@@ -106,6 +106,7 @@ start_service() {
 	prepare_data_dir
 	mkdir -p "$RUN_DIR"
 	mount_bpffs
+
 	check_geo
 	generate || return 1
 
@@ -115,7 +116,7 @@ start_service() {
 	# procd 的 logfile 参数在这台固件上不创建文件，所以用 sh -c 'exec ...'
 	# 自己重定向：exec 会让 honk-core 顶替 sh，procd 跟踪的 pid 仍然是它，
 	# 停止和 respawn 都正常。
-	procd_set_param command /bin/sh -c "exec $bin -c '$HONK_CONF' --data-dir '$(data_dir)' --disable-timestamp >>/var/log/honk.log 2>&1"
+	procd_set_param command /bin/sh -c "ulimit -l unlimited 2>/dev/null; exec $bin -c '$HONK_CONF' --data-dir '$(data_dir)' --disable-timestamp >>/var/log/honk.log 2>&1"
 	procd_set_param env DAE_LOCATION_ASSET="$(geo_dir)"
 	procd_set_param respawn 3600 5 5
 	procd_set_param stdout 0
