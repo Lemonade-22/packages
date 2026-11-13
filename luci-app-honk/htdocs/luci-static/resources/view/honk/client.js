@@ -334,8 +334,7 @@ return view.extend({
 
 		// 标题留空会让标题列塌成一条，tooltip 图标单独掉到按钮左上方。
 		// 给个正常标题，图标就和文字对齐了。
-		o = s.taboption('ssid', form.DummyValue, '_ssid_hint', _('无线网络'),
-			_('从 /etc/config/wireless 读出本机所有 wifi-iface 的 SSID。'));
+		o = s.taboption('ssid', form.DummyValue, '_ssid_hint', _('无线网络'), ' ');
 		o.rawhtml = true;
 		o.cfgvalue = function() {
 			var btn = E('button', {
@@ -414,7 +413,9 @@ return view.extend({
 			}, _('读取无线网络'));
 
 			var had = uci.sections('wireless', 'wifi-iface') || [];
-			return E('div', { 'class': 'cbi-value-description' }, [
+			// 不用 cbi-value-description：主题会给非空的它加一个绝对定位的 help 图标，
+			// 在这里会飘到按钮左上方。普通 div 没这个问题。
+			return E('div', { 'style': 'line-height:1.7' }, [
 				E('div', { 'style': 'margin-bottom:8px' }, [ btn ]),
 				E('p', {}, _('一行一个 SSID 网段。每行生成一条 sip(<源网段>) 出口规则；' +
 					'填了 DNS 上游时，还会在 dns.routing.request 里生成对应的 sip() 规则。' +
