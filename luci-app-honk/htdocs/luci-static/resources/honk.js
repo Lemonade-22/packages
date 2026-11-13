@@ -70,7 +70,9 @@ function renderConnection() {
 		return new Promise(function(resolve) {
 			var settled = false;
 			function finish(result) { if (!settled) { settled = true; resolve(result); } }
-			var timer = window.setTimeout(function() { finish({ timed_out: true }); }, 10000);
+			// 后端最长 16 秒。前端留一点余量，否则代理首包慢的时候
+			// 后端还在等，界面已经报"超时"了，看起来像是测试坏了。
+			var timer = window.setTimeout(function() { finish({ timed_out: true }); }, 18000);
 			connectionCheck('all').then(function(r) { window.clearTimeout(timer); finish(r); }, function() { window.clearTimeout(timer); finish({ failed: true }); });
 		}).then(function(result) {
 			if (generation !== current) return;

@@ -24,7 +24,7 @@ return { "luci.honk": {
 			let commands = [];
 			for (let site in sites) {
 				push(commands, sprintf(
-					'/usr/bin/curl --location --silent --output /dev/null --user-agent %s --connect-timeout 5 --max-time 9 --write-out %s %s',
+					'/usr/bin/curl --location --silent --output /dev/null --user-agent %s --connect-timeout 10 --max-time 16 --write-out %s %s',
 					shellQuote('Mozilla/5.0'),
 					shellQuote(sprintf('%s\\t%%{http_code}\\t%%{time_appconnect}\\t%%{time_total}\\n', site)),
 					shellQuote(CONNECTION_SITES[site])
