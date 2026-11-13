@@ -391,7 +391,7 @@ return view.extend({
 							return p.kind !== 'inline' && (p.name === key || p.id === key);
 						})[0];
 						if (!hit) throw new Error(_('内核里还没有这条订阅，先点「保存并应用」'));
-						return hk3.api('provider-refresh', hit.id).then(hk3.waitOperation);
+						return refreshSubscription(hit.id);
 					}).then(function() {
 						ui.addNotification(null, E('p', {}, _('订阅已更新：') + key), 'info');
 						actionBtn.textContent = _('已更新');
@@ -558,6 +558,23 @@ function bindSort(table) {
  * 靠每行按钮自己挂的 runProbe() 串起来，不轮询文字。
  */
 /*
+ * 刷新一条订阅。
+ *
+ * 浏览器在页面跳转、请求被取消时会抛 "XHR request aborted by browser"，
+ * 那是传输层的偶发中断，不是内核拒绝。重试一次就够了——真失败（比如内核
+ * 没起来）不会因为重试而变好，第二次仍然会报出来。
+ */
+function refreshSubscription(id, attempt) {
+	attempt = attempt || 1;
+	return hk3.api('provider-refresh', id).then(hk3.waitOperation).catch(function(e) {
+		var msg = String((e && e.message) || e);
+		if (attempt < 2 && /abort/i.test(msg))
+			return refreshSubscription(id, attempt + 1);
+		throw e;
+	});
+}
+
+/*
  * 页面底部操作区里跟 tab 相关的按钮：
  *   「测试所有节点」只在「节点」页有用，
  *   「更新所有订阅」只在「订阅」页有用。
@@ -657,7 +674,7 @@ function mountPageActions(el) {
 					}
 					var p = subs[i++];
 					updBtn.textContent = _('更新中 ') + i + '/' + subs.length;
-					return hk3.api('provider-refresh', p.id).then(hk3.waitOperation).then(next, function(e) {
+					return refreshSubscription(p.id).then(next, function(e) {
 						// 一条失败不该拖住后面的
 						ui.addNotification(null, E('p', {}, _('更新失败：') + (p.name || p.id) + ' — ' + hk3.describeError(e)), 'error');
 						return next();
