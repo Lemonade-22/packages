@@ -38,6 +38,9 @@
 				],
 				"/usr/share/honk/honk-status.sh": [
 					"exec"
+				],
+				"/usr/share/honk/dash-status.sh": [
+					"exec"
 				]
 			},
 			"ubus": {

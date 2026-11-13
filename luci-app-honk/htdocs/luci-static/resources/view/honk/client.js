@@ -1105,16 +1105,53 @@ return view.extend({
 			return box;
 		};
 
-		/* 仪表盘：honk 自己不带 Web UI，第三方要另装 */
+		/* 仪表盘：检测 honk 自带面板到底能不能用，而不是写死一句说明 */
 		o = s.taboption('status', form.DummyValue, '_dash', _('仪表盘'));
 		o.rawhtml = true;
 		o.cfgvalue = function() {
-			return E('div', { 'class': 'cbi-value-description' }, [
-				E('p', {}, _('doona：honk 官方 Web 界面，走原生 API，能看到实时连接与节点延迟。')),
-				E('p', {}, _('zashboard：基于 Clash API 的通用界面，观感更接近 Clash 系工具。')),
-				E('p', {}, _('两者都不随本插件安装。honk-core 起来之后，' +
-					'用 honk 项目提供的安装包自行安装即可；装好后从这里访问对应的本体地址。'))
-			]);
+			var box = E('div', { 'class': 'cbi-value-description' }, _('正在检测…'));
+
+			function check() {
+				return fs.exec('/usr/share/honk/dash-status.sh').then(function(res) {
+					var parts = String(res.stdout || '').trim().split('|');
+					var state = parts[0] || '';
+					var detail = (parts[1] || '').trim();
+
+					box.innerHTML = '';
+					if (state === 'ok') {
+						box.appendChild(E('p', {}, [
+							E('span', { 'style': 'color:#19be6b;font-weight:600' }, _('doona 已可用')),
+							'  ',
+							E('a', {
+								'href': detail, 'target': '_blank', 'rel': 'noreferrer noopener',
+								'style': 'word-break:break-all'
+							}, detail)
+						]));
+					} else if (state === 'nobuiltin') {
+						box.appendChild(E('p', {}, [
+							E('span', { 'style': 'color:#ff9900;font-weight:600' }, _('doona 未内置')),
+							'  ',
+							_('当前 honk-core 不含 native-ui 功能：根路径返回 HTTP ') + detail +
+							_(' 且没有跳转地址。要界面请换带 native-ui 的构建，或把 ui 指向一个含 index.html 的本地目录。')
+						]));
+					} else {
+						box.appendChild(E('p', {}, [
+							E('span', { 'style': 'color:gray;font-weight:600' }, _('无法检测')),
+							'  ',
+							_('honk-core 没在运行，或者 native API 没开。')
+						]));
+					}
+
+					box.appendChild(E('p', {}, _('zashboard：基于 Clash API 的第三方界面，' +
+						'需要 honk-core 带 clash-api。')));
+				}).catch(function(e) {
+					box.textContent = String(e);
+				});
+			}
+
+			check();
+			poll.add(check, 15);
+			return box;
 		};
 
 		o = s.taboption('status', form.Button, '_reload', _('重新生成配置'));
