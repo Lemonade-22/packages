@@ -20,6 +20,7 @@ return view.extend({
 		return Promise.all([
 			uci.load('honk'),
 			uci.load('network'),
+			uci.load('wireless'),
 			fs.read('/var/log/honk.log').catch(function() { return ''; })
 		]).then(function(res) {
 			var groups = uci.sections('honk', 'group').map(function(g) {
@@ -37,7 +38,7 @@ return view.extend({
 				.filter(function(n) { return /^wifi\d+$/.test(n); })
 				.sort();
 
-			return { groups: groups, nodes: nodes, ifaces: ifaces, log: res[2] || '' };
+			return { groups: groups, nodes: nodes, ifaces: ifaces, log: res[3] || '' };
 		});
 	},
 
@@ -334,13 +335,91 @@ return view.extend({
 		o = s.taboption('ssid', form.DummyValue, '_ssid_hint', null);
 		o.rawhtml = true;
 		o.cfgvalue = function() {
+			var btn = E('button', {
+				'class': 'btn cbi-button cbi-button-action',
+				'style': 'margin-right:8px',
+				'click': ui.createHandlerFn(this, function(ev) {
+					ev.preventDefault();
+					var ifaces = uci.sections('wireless', 'wifi-iface') || [];
+					if (!ifaces.length) {
+						ui.addNotification(null, E('p', {}, _('没读到无线接口：本机可能没有无线驱动，' +
+							'或者 /etc/config/wireless 里没有 wifi-iface。')), 'warning');
+						return;
+					}
+
+					// 每行一个勾选框，默认全选
+					var boxes = ifaces.map(function(w) {
+						var dev = uci.get('wireless', w['.name'], 'ifname') ||
+							uci.get('wireless', w['.name'], 'network') || w['.name'];
+						var cb = E('input', { 'type': 'checkbox', 'checked': 'checked' });
+						var row = E('label', { 'style': 'display:block;padding:2px 0' }, [
+							cb,
+							' ',
+							E('strong', {}, w.ssid || '(无 SSID)'),
+							E('span', { 'style': 'color:#888;margin-left:8px' }, dev)
+						]);
+						return { cb: cb, ssid: w.ssid || w['.name'], dev: dev, cfg: w };
+					});
+
+					ui.showModal(_('读取到的无线网络'), [
+						E('p', {}, _('勾选要生成分流规则的 SSID。已在列表里的会跳过。')),
+						E('div', { 'style': 'max-height:18em;overflow:auto' }, boxes.map(function(b) { return b.cb.parentNode; })),
+						E('div', { 'class': 'right' }, [
+							E('button', { 'class': 'btn', 'click': ui.hideModal }, _('取消')),
+							' ',
+							E('button', {
+								'class': 'btn cbi-button-action',
+								'click': ui.createHandlerFn(this, function() {
+									var existing = {};
+									uci.sections('honk', 'ssid_route').forEach(function(x) {
+										if (x.name) existing[x.name] = 1;
+									});
+
+									var added = 0;
+									boxes.forEach(function(b) {
+										if (!b.cb.checked)
+											return;
+										if (existing[b.ssid])
+											return;
+
+										var sid = uci.add('honk', 'ssid_route');
+										uci.set('honk', sid, 'enabled', '1');
+										uci.set('honk', sid, 'name', b.ssid);
+										// interface 不填：那个字段要的是 network 里的 wifiN 接口名，
+										// 跟 wireless 的 ifname 不是一回事，硬填会写错。
+										added++;
+									});
+
+									if (!added) {
+										ui.addNotification(null, E('p', {}, _('没有新增：选中的要么没勾，要么已经在列表里了。')), 'info');
+										return ui.hideModal();
+									}
+
+									return uci.save()
+										.then(L.bind(this.map.load, this.map))
+										.then(L.bind(this.map.reset, this.map))
+										.then(function() {
+											ui.addNotification(null, E('p', {},
+												_('已添加 %d 条，源网段还需要你自己填。').format(added)), 'info');
+											ui.hideModal();
+										});
+								})
+							}, _('添加'))
+						])
+					]);
+				})
+			}, _('读取无线网络'));
+
+			var had = uci.sections('wireless', 'wifi-iface') || [];
 			return E('div', { 'class': 'cbi-value-description' }, [
+				E('div', { 'style': 'margin-bottom:8px' }, [ btn ]),
 				E('p', {}, _('一行一个 SSID 网段。每行生成一条 sip(<源网段>) 出口规则；' +
 					'填了 DNS 上游时，还会在 dns.routing.request 里生成对应的 sip() 规则。' +
 					'这些规则排在大陆直连规则之前，所以网段总是优先。')),
-				E('p', {}, (data.ifaces || []).length
-					? _('可选的 wifiNN 接口：') + E('em', {}, data.ifaces.join(', '))
-					: _('本机没有 wifiNN 接口——可能是 WIFI-NO 固件（无无线驱动），或者还没生成多 SSID。' +
+				E('p', {}, had.length
+					? _('本机无线网络：') + E('em', {},
+						had.map(function(w) { return (w.ssid || w['.name']); }).join('、'))
+					: _('本机没有读到无线接口——可能是 WIFI-NO 固件（无无线驱动）。' +
 						'接口一栏留空即可，直接填网段。'))
 			]);
 		};
@@ -374,7 +453,8 @@ return view.extend({
 		});
 		o.rmempty = false;
 
-		o = ssr.option(form.Value, 'interface', _('接口'));
+		o = ssr.option(form.ListValue, 'interface', _('接口'),
+			_('对应 /etc/config/wireless 里的 wifi-iface 设备名。'));
 		(data.ifaces || []).forEach(function(i) {
 			o.value(i, i);
 		});
