@@ -332,20 +332,11 @@ return view.extend({
 
 		/* ================= 多SSID分流 ================= */
 
-		o = s.taboption('ssid', form.DummyValue, '_ssid_hint', '');
+		// 标题留空会让标题列塌成一条，tooltip 图标单独掉到按钮左上方。
+		// 给个正常标题，图标就和文字对齐了。
+		o = s.taboption('ssid', form.DummyValue, '_ssid_hint', _('无线网络'),
+			_('从 /etc/config/wireless 读出本机所有 wifi-iface 的 SSID。'));
 		o.rawhtml = true;
-		// DummyValue 会渲染成「标题列 + 值列」，标题为 null 时主题会补一个 ?。
-		// 这块内容要占满整行，所以标题留空并把图标藏掉。
-		o.renderWidget = function() {
-			var el = form.DummyValue.prototype.renderWidget.apply(this, arguments);
-			var titleCell = el.querySelector('.cbi-value-title');
-			if (titleCell) {
-				titleCell.style.display = 'none';
-				var valCell = el.querySelector('.cbi-value-field');
-				if (valCell) valCell.style.width = '100%';
-			}
-			return el;
-		};
 		o.cfgvalue = function() {
 			var btn = E('button', {
 				'class': 'btn cbi-button cbi-button-action',
