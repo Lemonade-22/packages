@@ -92,6 +92,20 @@ mkdir -p "$(dirname "$OUT")"
   echo "}"
   echo
 
+  # geodata：honk 不读本地 .dat 文件，只认这里配的下载源（或 API 上传）。
+  # 不配的话 geosite:/geoip: 那些匹配器是静默失效的——规则看着在，实际不匹配。
+  # URL 选的是这台机器实测能下到的源（jsdelivr / github release）。
+  GEOSITE_URL="${GEOSITE_URL:-https://cdn.jsdelivr.net/gh/Loyalsoldier/v2ray-rules-dat@release/geosite.dat}"
+  GEOIP_URL="${GEOIP_URL:-https://github.com/Loyalsoldier/geoip/releases/latest/download/geoip.dat}"
+  echo "assets {"
+  echo "    geodata {"
+  echo "        geosite: '$(sq "$GEOSITE_URL")'"
+  echo "        geoip: '$(sq "$GEOIP_URL")'"
+  echo "        route: direct"
+  echo "    }"
+  echo "}"
+  echo
+
   wrote_node=0
   for s in $(sections node); do
     [ "$(uci -q get "$CONF.$s.enabled")" = "1" ] || continue
