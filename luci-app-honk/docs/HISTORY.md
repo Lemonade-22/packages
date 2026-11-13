@@ -202,7 +202,41 @@ honk/client 改成了 honk/panel。
 | 日志 | 可用（/var/log/honk.log） |
 | 开机自启 | 关着（S99honk 已删） |
 
-## 六、待办
+## 六、订阅迁移：会踩的坑
+
+新生成器不再加载带 `subscription` 字段的旧导入节点（第 48 行 `if (n.subscription ...) continue`），
+避免和 honk 原生订阅重复。但**组的成员是按节点名引用的**，旧组的成员全都指向这些节点。
+
+实测确认的两件事：
+
+**一、节点名是一致的。** honk-core 的 `share_link.rs`：
+
+```rust
+// VMess
+name: self.ps.filter(|name| !name.is_empty()).unwrap_or_else(|| format!("vmess-{}", host))
+// 其余协议
+node.name = url.fragment().map(percent_decode_str)
+    .or_else(|| query.get("remark"))
+    .unwrap_or_else(|| format!("{}-{}", url.scheme(), node.host));
+```
+
+VMess 取 `ps`，其他取 `#` 后那段，URL 解码——跟导入脚本用的是同一个字段。
+所以 `filter: name('某节点名')` 能匹配上订阅解析出来的节点。
+
+**二、组为空时的后果比想象中轻。** 用官方 beta.6 二进制在 mock 模式跑：
+
+```
+INFO Group 'proxy' resolved 0 node(s)
+INFO Router ready with 0 compiled routes
+```
+
+honk **不报错**，但会把引用这个组的规则**静默丢掉**。
+后果是代理不生效、流量退回直连，而不是断网。危险的是它一句话都不说。
+
+**所以迁移时要注意**：升级后先看运行状态页的分组是否 `resolved N node(s)`，
+N 为 0 就说明成员名对不上，得把组的成员改成 `subtag(订阅名)` 或者重新选。
+
+## 七、待办
 
 1. **doona 打不开**。非回环监听必须带认证，二选一：
    secret: '<16+ 字节随机>' 或 password_auth: true。
@@ -212,7 +246,7 @@ honk/client 改成了 honk/panel。
 5. **geo 的 assets.geodata 从未真正触发下载**。本地文件一直在，
    那条兜底路径没被验证过。
 
-## 七、一条教训
+## 八、一条教训
 
 这一路「改了没生效」出现了七八次，绝大多数不是代码问题，而是：
 
