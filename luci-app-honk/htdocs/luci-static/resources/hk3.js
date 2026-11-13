@@ -17,6 +17,15 @@ var connectionCheck = rpc.declare({ object: 'luci.honk', method: 'connection_che
    其余动作会改运行时状态，必须落在写权限的 honk-api.sh 上。 */
 var READ_ACTIONS = { nodes: 1, providers: 1, groups: 1, group: 1, runtime: 1, config: 1, operation: 1 };
 
+/* 内核没起来时，curl 的原文（Failed to connect to 127.0.0.1:9527 ...）
+   对用户没有任何意义。这里统一翻成一句人话。 */
+function describeError(e) {
+  var msg = (e && (e.message || e)) ? String(e.message || e) : '';
+  if (/Failed to connect|Connection refused|:9527|curl: \(7\)/i.test(msg))
+    return _('内核未运行');
+  return msg;
+}
+
 function api() {
 	var args = Array.prototype.slice.call(arguments);
 	var script = READ_ACTIONS[args[0]] ? '/usr/share/honk/honk-read.sh' : '/usr/share/honk/honk-api.sh';
@@ -149,7 +158,7 @@ function mountStatusBanner(el) {
 			}
 		}).catch(function(e) {
 			banner.style.color = '#ff9900';
-			banner.textContent = _('无法读取状态：') + e;
+			banner.textContent = _('无法读取状态：') + describeError(e);
 		});
 	}
 
@@ -237,7 +246,7 @@ function renderProviders() {
 
 			box.appendChild(table);
 		}).catch(function(e) {
-			box.textContent = _('无法读取订阅状态：') + e.message;
+			box.textContent = _('无法读取订阅状态：') + describeError(e);
 		});
 	}
 
@@ -316,7 +325,7 @@ function renderPicking() {
 				});
 				pane.appendChild(list);
 			}).catch(function(e) {
-				pane.textContent = _('无法读取组详情：') + e.message;
+				pane.textContent = _('无法读取组详情：') + describeError(e);
 			});
 		}
 
@@ -345,7 +354,7 @@ function renderPicking() {
 				box.appendChild(row);
 			});
 		}).catch(function(e) {
-			box.textContent = _('无法读取分组：') + e.message;
+			box.textContent = _('无法读取分组：') + describeError(e);
 		});
 	}
 
@@ -385,9 +394,11 @@ function renderApplyStatus() {
 			box.innerHTML = '';
 
 			var label, color;
+			// 没有应用记录就把这一行整个撤掉。留一句"还没有应用记录"只是噪音：
+			// 横幅已经说了内核在不在跑，这里再挂个感叹号没人需要。
 			if (!apply) {
-				label = _('还没有应用记录');
-				color = '#888';
+				box.remove();
+				return;
 			} else if (apply.status && !apply.operation_id) {
 				var t = TEXT[apply.status];
 				label = t ? t[0] : apply.status;
@@ -414,7 +425,7 @@ function renderApplyStatus() {
 				}, typeof why === 'string' ? why : JSON.stringify(why, null, 1)));
 			}
 		}).catch(function(e) {
-			box.textContent = _('无法读取应用状态：') + e.message;
+			box.textContent = _('无法读取应用状态：') + describeError(e);
 		});
 	}
 

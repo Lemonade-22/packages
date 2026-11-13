@@ -41,7 +41,15 @@ return view.extend({
 				runtime: Array.isArray(res[1]) ? res[1] : [],
 				providers: Array.isArray(res[2]) ? res[2] : [],
 				running: Array.isArray(res[3]) ? res[3] : [],
-				loadErrors: [res[1], res[2], res[3]].filter(function(x) { return x && x.error; }).map(function(x) { return x.error; }),
+				loadErrors: [res[1], res[2], res[3]]
+			.filter(function(x) { return x && x.error; })
+			.map(function(x) { return x.error; })
+			.filter(function(e, i, a) { return a.indexOf(e) === i; }),
+		// 内核没运行时三个请求都会撞同一个连接失败，那不是"数据读错了"。
+		// 状态横幅已经写了未运行，界面不该再刷三条红字。
+		offline: [res[1], res[2], res[3]].some(function(x) {
+			return x && x.error && /Failed to connect|Connection refused|:9527/i.test(x.error);
+		}),
 				groups: groups,
 				main: (uci.get('honk', 'config', 'main_group') || '').trim()
 			};
@@ -176,6 +184,9 @@ return view.extend({
 		var gv = s.taboption('groups', form.SectionValue, '_groups', form.GridSection, 'group', null);
 		var groupsSec = gv.subsection;
 		groupsSec.addremove = true;
+	// 表里塞太多列就挤成一团，说明行还会把表撑高一倍。
+	// 只留组名/策略/成员，其余进编辑弹窗。
+	groupsSec.nodescriptions = true;
 		groupsSec.sortable = true;
 		groupsSec.anonymous = true;
 		groupsSec.sectiontitle = function(section_id) {
@@ -268,6 +279,7 @@ return view.extend({
 		o.description = _('选节点或别的组。留空表示这个组暂时不含任何成员（不会自动包含全部节点）。');
 
 		o = groupsSec.option(form.DynamicList, 'providers', _('订阅成员'));
+    o.modalonly = true;
 		uci.sections('honk', 'subscription').filter(function(x) { return x.enabled === '1'; }).forEach(function(x) {
 			var tag = x.tag || x.name || x['.name'];
 			o.value(tag, tag);
@@ -278,6 +290,7 @@ return view.extend({
 		// 机场常在订阅里塞「剩余流量」「套餐到期」这类占位节点，连接参数是真的
 		// 但连不上，自动选优会挑到它们。这里按节点名过滤。
 		o = groupsSec.option(form.ListValue, 'filter_nodes', _('过滤节点'));
+    o.modalonly = true;
 		o.value('disabled', _('不过滤'));
 		o.value('blacklist', _('黑名单：丢弃命中关键词的'));
 		o.value('whitelist', _('白名单：只保留命中关键词的'));
@@ -285,22 +298,26 @@ return view.extend({
 		o.rmempty = false;
 
 		o = groupsSec.option(form.DynamicList, 'filter_keywords', _('过滤关键词'));
+    o.modalonly = true;
 		o.placeholder = '剩余流量';
 		o.description = _('按节点名做子串匹配，不区分大小写。白名单模式下只留命中的节点，' +
 			'黑名单模式下丢弃命中的节点。留空等于不过滤。');
 		o.rmempty = true;
 
 		o = groupsSec.option(form.Value, 'check_url', _('健康检查地址'));
+    o.modalonly = true;
 		o.placeholder = 'http://1.1.1.1';
 		o.description = _('用 IP 而不是域名。用域名会陷入「探测要解析、解析要代理、代理要评分」的死锁。');
 		o.rmempty = true;
 
 		o = groupsSec.option(form.Value, 'tolerance', _('切换容忍（毫秒）'));
+    o.modalonly = true;
 		o.datatype = 'uinteger';
 		o.placeholder = '50';
 		o.rmempty = true;
 
 		o = groupsSec.option(form.ListValue, 'final', _('兜底'));
+    o.modalonly = true;
 		o.value('direct', _('直连'));
 		o.value('block', _('阻断'));
 		(data.groups || []).forEach(function(g) { o.value(g, _('[组] ') + g); });
@@ -317,6 +334,8 @@ return view.extend({
 		var subv = s.taboption('subs', form.SectionValue, '_subscriptions', form.GridSection, 'subscription', _('订阅配置'));
 		var subsSec = subv.subsection;
 		subsSec.addremove = true;
+	// 同上：表格只留 启用/名称/地址，标识/间隔/UA 都在编辑弹窗里改
+	subsSec.nodescriptions = true;
 		subsSec.sortable = true;
 		subsSec.anonymous = true;
 		subsSec.sectiontitle = function(section_id) {
@@ -338,11 +357,13 @@ return view.extend({
 		o.description = _('支持链接列表、Base64、Clash YAML 和 JSON。解析交给内核，失败会显示原因。');
 
 		o = subsSec.option(form.Value, 'tag', _('订阅标识'));
+    o.modalonly = true;
 		o.placeholder = 'sub';
 		o.description = _('组里用「订阅成员」引用这个名字。留空则用名称。');
 		o.rmempty = true;
 
 		o = subsSec.option(form.Value, 'interval', _('自动更新间隔（秒）'));
+    o.modalonly = true;
 		o.datatype = 'uinteger';
 		o.default = '86400';
 		o.description = _('机场换节点不会等一天。更新完要点「保存并应用」才会真正重载。');
@@ -350,6 +371,7 @@ return view.extend({
 		// 机场按 UA 返回不同格式。留空就用 honk 自己的 honk/<版本>；
 		// 兼容面最广的是 clash.meta —— 出 Clash YAML 的机场基本都认它。
 		o = subsSec.option(form.ListValue, 'user_agent', _('订阅 User-Agent'));
+    o.modalonly = true;
 		o.value('', _('默认（honk/<版本>）'));
 		o.value('clash.meta', 'clash.meta');
 		o.value('mihomo', 'mihomo');
@@ -367,6 +389,7 @@ return view.extend({
 			'支持 Clash YAML 的机场都认它。');
 
 		o = subsSec.option(form.Value, 'user_agent_custom', _('自定义 User-Agent'));
+    o.modalonly = true;
 		o.depends('user_agent', 'custom');
 		o.placeholder = 'clash.meta';
 		o.rmempty = true;
@@ -378,7 +401,8 @@ return view.extend({
 		return m.render().then(function(el) {
 			hk3.mountStatusBanner(el);
 			hk3.layoutFullRows(el);
-			if (data.loadErrors.length) ui.addNotification(null, E('p', {}, _('运行时数据读取失败：') + data.loadErrors.join('; ')), 'error');
+			if (data.loadErrors.length && !data.offline)
+				ui.addNotification(null, E('p', {}, _('运行时数据读取失败：') + data.loadErrors.join('; ')), 'error');
 
 			// fullRow 在 cfgvalue 里执行时元素还没进 DOM，往上找不到 .cbi-value，
 			// 宽度那一步只能等渲染完再做。不设的话表格被 <output> 固定成 400px，
