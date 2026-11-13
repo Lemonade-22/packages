@@ -53,10 +53,6 @@ if [ ! -e /sys/class/net/br-lan ]; then
 	[ -n "$lan_dev" ] && uci -q set honk.infra.lan_interface="$lan_dev"
 fi
 uci -q commit honk 2>/dev/null
-# 注册开机自启。没有 rc.d 软链的话 procd 不会为这个服务装 uci reload trigger，
-# 界面上「保存并应用」就触发不到 init 脚本，开关打开内核也不动。
-# start_service 里会先看 honk.config.enabled，关着就直接返回，所以提前 enable 是安全的。
-/etc/init.d/honk enable 2>/dev/null
 exit 0
 endef
 
@@ -87,10 +83,6 @@ if [ ! -e /sys/class/net/br-lan ]; then
 	[ -n "$lan_dev" ] && uci -q set honk.infra.lan_interface="$lan_dev"
 fi
 uci -q commit honk 2>/dev/null
-# 注册开机自启。没有 rc.d 软链的话 procd 不会为这个服务装 uci reload trigger，
-# 界面上「保存并应用」就触发不到 init 脚本，开关打开内核也不动。
-# start_service 里会先看 honk.config.enabled，关着就直接返回，所以提前 enable 是安全的。
-/etc/init.d/honk enable 2>/dev/null
 exit 0
 endef
 

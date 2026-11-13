@@ -56,6 +56,17 @@ return view.extend({
 		});
 	},
 
+	// LuCI 的「保存并应用」只把 UCI 提交掉，内核不会自己重启：
+	// procd 的 uci trigger 只在服务开机被 enable 过才存在，装完还没启用时等于没有。
+	// 基类的 handleSaveApply 在 luci.js 里，这里接一层，等它应用完再让 init reload。
+	handleSaveApply: function(ev, mode) {
+		var base = view.prototype.handleSaveApply;
+		var chain = base ? base.call(this, ev, mode) : Promise.resolve();
+		return chain.then(function(res) {
+			return hk3.applyService().then(function() { return res; });
+		});
+	},
+
 	render: function(data) {
 		var m = new form.Map('honk', _('节点设置'),
 			_('手动节点、分组定义与订阅。节点由内核解析，这里只负责把选择写进 UCI。'));
