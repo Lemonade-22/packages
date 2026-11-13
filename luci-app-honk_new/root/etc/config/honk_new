@@ -2,9 +2,14 @@
 
 config honk 'config'
 	option enabled '0'
-	option main_group 'nil'
+	# 指向下面那个示例组。装完把节点塞进 proxy 组、打开开关就能用，
+	# 不用先想清楚"主分组该填谁"。
+	option main_group 'proxy'
 	option routing_mode 'bypass_mainland_china'
-	option routing_port 'common'
+	# 空 = 所有端口都走代理规则，兜底 fallback 才是 proxy。
+	# 填 common 会变成"只代理常用端口、其余直连"，那是有意为之的白名单模式，
+	# 不适合当默认值——会让 P2P、游戏、非标端口全部绕过代理。
+	option routing_port ''
 	option ipv6_mode 'block'
 	option quic_mode 'block'
 	option custom_rules_enabled '0'
@@ -14,7 +19,9 @@ config honk 'config'
 config honk 'infra'
 	option data_dir '/var/lib/honk_new'
 	option log_level 'info'
-	option bootstrap_resolver '1.1.1.1:53'
+	# 只用来解析节点域名和 DNS 上游域名，必须选国内能通的。
+	# 1.1.1.1 在墙内经常连不上，那会让节点域名解析失败、整个代理起不来。
+	option bootstrap_resolver '223.5.5.5:53'
 	option geo_asset_dir '/usr/share/honk_new/geo'
 # 首次安装留空给用户自己选；br-lan 不存在时这里不填
 	option lan_interface 'br-lan'

@@ -140,48 +140,25 @@ mkdir -p "$(dirname "$OUT")" || exit 1
   fi
 
   echo "routing {"
-  # 旁路由（单臂路由）拓扑下，上游和下游是同一个接口。honk 如果只按默认路由
-  # 认出口，会把 br-lan 当成 WAN，连路由器自己的 SSH / LuCI / DNS 一起劫走，
-  # 配完就再也连不上。先把 LAN 网段和本机 dnsmasq 放行，这两条必须在最前面。
-  lan_cidr="$(uci -q get network.lan.ipaddr 2>/dev/null | head -n 1)"
-  lan_ip="${lan_cidr%%/*}"
-  if [ -n "$lan_cidr" ] && [ -n "$lan_ip" ]; then
-    case "$lan_cidr" in
-      */*) net="$(cidr_net "$lan_cidr")" ;;
-      *)
-        lan_mask="$(uci -q get network.lan.netmask 2>/dev/null)"
-        if [ -n "$lan_mask" ]; then
-          net="$(cidr_net "$lan_cidr/$lan_mask")"
-        else
-          net=""
-        fi
-        ;;
-    esac
-    # 只放行"局域网访问路由器本体"，不能写成 sip(<lan>) -> direct：
-    # 那样连 LAN 设备去外网的流量也一起直连，代理形同虚设。
-    # 目的地址限定成路由器自己的 LAN IP，入站的 SSH/LuCI 才不会被劫走。
-    #
-    # 必须用 direct(must)：普通 direct 只是选直连出口，DNS 仍归 honk 接管，
-    # 管理连接照样会被卷进去。must 才会立即终结规则搜索、跳过 DNS 控制器。
-    # 排除 53 是有意的——那一路继续走 honk 做透明 DNS。
-    #
-    # honk 会检查"每个本机地址是否都被放行过"，漏一个就报 self-protection
-    # coverage could not be confirmed。所以这里把所有本地地址都枚举一遍，
-    # 不能只写 LAN 那个 IPv4。
-    _src="${net:-$lan_cidr}"
-    _local="$(ip -4 -o addr show 2>/dev/null | awk '{print $4}' | cut -d/ -f1)
-$(ip -6 -o addr show scope global 2>/dev/null | awk '{print $4}' | cut -d/ -f1)"
-    echo "$_local" | while IFS= read -r _a; do
-      [ -n "$_a" ] || continue
-      case "$_a" in 127.*|::1) continue ;; esac
-      echo "    sip($_src) && dip($_a) && !dport(53) -> direct(must)"
-    done
-  fi
-  # Router 自己的 DNS 交给 dnsmasq，不要绕回 honk。
-  # 注意：不能让 53 走 direct —— 明文 DNS 在国内全是投毒结果
-  # （google 会解析成 Twitter / Facebook 的 IP 段），必须由 honk
-  # 用加密上游解析，那才是能拿到真实地址的唯一路子。
-  echo "    pname(dnsmasq) -> direct"
+  # 照 daede 的做法：不逐条枚举本机地址，一条私有网段规则全包。
+  # geoip:private 覆盖 10/8、172.16/12、192.168/16、127/8、169.254/16、
+  # ::1/128、fe80::/10、fc00::/7 —— 内网、回环、链路本地都在里面。
+  # 之前那套 "sip(<lan>) && dip(<每个本机IP>) && !dport(53)" 之所以要穷举，
+  # 是因为单臂路由下路由器自己也在被代理的接口上；用私有网段规则之后
+  # 这个穷举完全没必要，IPv6 地址变化也不会再漏。
+  #
+  # 必须用 direct(must)：普通 direct 只选直连出口，DNS 仍归 honk 接管，
+  # 管理连接照样被卷进去。must 才会立即终结规则搜索。
+  echo "    pname(NetworkManager, systemd-resolved, dnsmasq, honk-core) -> direct(must)"
+  echo "    dip(geoip:private) -> direct(must)"
+
+  # 组播和广播：geoip:private 不覆盖这几段，单独放行
+  echo "    dip(224.0.0.0/3) -> direct"
+  echo "    dip(255.255.255.255/32) -> direct"
+  echo "    dip('ff00::/8') -> direct"
+
+  # NTP 走直连，否则时间同步会被代理拖到超时
+  echo "    l4proto(udp) && dport(123) -> direct"
 
   target="direct"
   if [ "$MAIN_GROUP" != "nil" ] && [ -n "$MAIN_GROUP" ]; then
@@ -209,10 +186,7 @@ $(ip -6 -o addr show scope global 2>/dev/null | awk '{print $4}' | cut -d/ -f1)"
     fi
     # 只影响"全局"档位：direct 让 v6 整体直连，block_global 让 v6 整体断开。
     # 两者都必须压在最前，否则会被下面的 geosite-cn / geoip-cn 抢先。
-    # 回环先放行。resolv.conf 里同时有 127.0.0.1 和 ::1，客户端挑到 ::1 时
-    # 如果被下面的 ipversion(6) 规则拦掉，表现是"某些站点解析超时、另一些正常"，
-    # 极难查。本机回环永远不该受 v6 策略影响。
-    echo "    dip(::1) -> direct(must)"
+    # 回环和链路本地已经在最上面的 dip(geoip:private) 里放行了，这里不用再写。
     case "$IPV6_MODE" in
       direct)       echo "    ipversion(6) -> direct" ;;
       block_global) echo "    ipversion(6) -> block" ;;
@@ -241,8 +215,12 @@ $(ip -6 -o addr show scope global 2>/dev/null | awk '{print $4}' | cut -d/ -f1)"
     esac
     # 这一档故意排在 geosite/geoip 之后：CN 的 v6 先被直连规则接住，
     # 只有非 CN 的 v6 落到这里被阻断。想一个不留就用 block_global。
-    # 同上：回环必须在 v6 策略之前放行
-  [ "$IPV6_MODE" = "block" ] && printf '%s\n' "    dip(::1) -> direct(must)" "    ipversion(6) -> block"
+    # 显式补一条「geoip 判定为 CN 的 v6 直连」：geosite 只管域名，
+    # 直接连 IP 的国内 v6 服务靠这条兜住，不会因为域名匹配不到被误断。
+  if [ "$IPV6_MODE" = "block" ]; then
+    echo "    ipversion(6) && dip(geoip:cn) -> direct"
+    echo "    ipversion(6) -> block"
+  fi
 
     # 域名分流：一条规则一个 section，domains 是 UCI list
     for s in $(sections domain_route); do
