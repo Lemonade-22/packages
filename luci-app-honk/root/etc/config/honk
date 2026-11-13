@@ -36,25 +36,10 @@ config honk 'infra'
 	# 每项一个 URL；geosite.dat 表示用内置分类
 	list ad_block_source 'geosite.dat'
 	# DNS 单选：cn_dns / remote_dns 是预设，*_custom 非空时优先
-	option cn_dns ''
+	option cn_dns 'udp://223.5.5.5:53'
 	option cn_dns_custom ''
-	option remote_dns ''
+	option remote_dns 'https://dns.cloudflare.com/dns-query'
 	option remote_dns_custom ''
-
-# 上游 DNS。role: cn / remote
-config dns_upstream 'cn_ali'
-	option enabled '1'
-	option name 'cn_ali'
-	option uri 'https://dns.alidns.com/dns-query'
-	option role 'cn'
-	option outbound ''
-
-config dns_upstream 'remote_cf'
-	option enabled '1'
-	option name 'remote_cf'
-	option uri 'https://dns.cloudflare.com/dns-query'
-	option role 'remote'
-	option outbound ''
 
 # 节点：honk 的每个 node 就是一条分享链接
 config node 'sample'
@@ -73,7 +58,7 @@ config group 'proxy'
 	# 探测地址用 IP，不依赖 DNS。用域名会陷入同一个鸡生蛋。
 	option check_url 'http://1.1.1.1'
 	option tolerance '50'
-	option final 'direct'
+	option final 'block'
 
 # 订阅：下载后解析成节点，节点名会带上 tag 前缀
 config subscription 'example_sub'

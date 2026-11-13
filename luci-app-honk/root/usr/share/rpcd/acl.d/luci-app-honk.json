@@ -15,42 +15,40 @@
 				"/var/log/honk.log": [
 					"read"
 				],
-				"/usr/share/honk/gen_dae.sh": [
-					"exec"
-				],
-				"/usr/share/honk/probe.sh": [
-					"exec"
-				],
-				"/usr/share/honk/update-adblock.sh": [
-					"exec"
-				],
-				"/usr/share/honk/update-subs.sh": [
-					"exec"
-				],
-				"/usr/share/honk/update-geo.sh": [
-					"exec"
-				],
-				"/etc/init.d/honk": [
-					"exec"
-				],
-				"/usr/share/honk/honk-api.sh": [
-					"exec"
-				],
 				"/usr/share/honk/honk-status.sh": [
 					"exec"
 				],
 				"/usr/share/honk/dash-status.sh": [
 					"exec"
+				],
+				"/usr/share/honk/honk-read.sh": [
+					"exec"
+				],
+				"/usr/share/honk/log-tail.sh": [
+					"exec"
+				],
+				"/var/run/honk/apply.json": [
+					"read"
+				],
+				"/var/run/honk/validation.json": [
+					"read"
+				],
+				"/usr/share/honk/geo/*": [
+					"stat"
 				]
 			},
 			"ubus": {
 				"service": [
 					"list"
+				],
+				"luci.honk": [
+					"connection_check"
 				]
 			},
 			"uci": [
 				"honk",
-				"network"
+				"network",
+				"wireless"
 			]
 		},
 		"write": {
@@ -63,6 +61,18 @@
 				],
 				"/etc/honk/adblock.list": [
 					"write"
+				],
+				"/usr/share/honk/update-adblock.sh": [
+					"exec"
+				],
+				"/usr/share/honk/update-geo.sh": [
+					"exec"
+				],
+				"/usr/share/honk/honk-api.sh": [
+					"exec"
+				],
+				"/etc/init.d/honk": [
+					"exec"
 				]
 			},
 			"uci": [

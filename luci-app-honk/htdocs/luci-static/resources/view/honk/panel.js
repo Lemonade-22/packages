@@ -5,6 +5,7 @@
 'require ui';
 'require fs';
 'require poll';
+'require honk';
 
 /*
  * luci-app-honk
@@ -21,14 +22,15 @@ return view.extend({
 			uci.load('honk'),
 			uci.load('network'),
 			uci.load('wireless'),
-			fs.read('/var/log/honk.log').catch(function() { return ''; })
+			fs.exec('/usr/share/honk/log-tail.sh').then(function(r) { return r.stdout; }).catch(function() { return ''; }),
+			honk.nodes().catch(function() { return []; })
 		]).then(function(res) {
 			var groups = uci.sections('honk', 'group').map(function(g) {
 				return (g.name || g['.name'] || '').trim();
 			}).filter(function(n) { return n.length > 0; });
 
 			var nodes = uci.sections('honk', 'node').filter(function(n) {
-				return n.enabled === '1' && (n.uri || '').length > 0;
+				return !n.subscription && n.enabled === '1' && (n.uri || '').length > 0;
 			}).map(function(n) {
 				return { id: n['.name'], name: n.name || n['.name'], uri: n.uri };
 			});
@@ -38,7 +40,7 @@ return view.extend({
 				.filter(function(n) { return /^wifi\d+$/.test(n); })
 				.sort();
 
-			return { groups: groups, nodes: nodes, ifaces: ifaces, log: res[3] || '' };
+			return { groups: groups, nodes: nodes.concat(res[4] || []), ifaces: ifaces, log: res[3] || '' };
 		});
 	},
 
@@ -131,39 +133,15 @@ return view.extend({
 
 		/* ================= 节点与分组 ================= */
 
-		/* 节点按来源订阅分表显示：一个订阅一张表，标题就是订阅名。
-		   手动添加的（没有 subscription 字段）单独一张表放最后。 */
-		var subTags = [];
-		uci.sections('honk', 'node').forEach(function(n) {
-			var t = String(n.subscription || '').trim();
-			if (t && subTags.indexOf(t) < 0)
-				subTags.push(t);
-		});
-		subTags.push('');
-
-		var manualSec = null;
-
-		subTags.forEach(function(tag, ti) {
-			var title = tag ? tag : _('手动添加');
-			var nv = s.taboption('nodes', form.SectionValue, '_nodes' + ti, form.GridSection, 'node', title);
-			var nodesSec = nv.subsection;
-			nodesSec.addremove = true;
-			nodesSec.sortable = true;
-			nodesSec.anonymous = true;
-			nodesSec.sectiontitle = function(section_id) {
-				return uci.get('honk', section_id, 'name') || section_id;
-			};
-			// 只显示属于本订阅的节点
-			nodesSec.filter = function(section_id) {
-				var t = String(uci.get('honk', section_id, 'subscription') || '').trim();
-				return t === tag;
-			};
-			if (tag === '')
-				manualSec = nodesSec;
-		});
-
-		// subTags 里一定有一个空串，所以 manualSec 必然被赋值
-		var nodesSec = manualSec;
+		var nv = s.taboption('nodes', form.SectionValue, '_manual_nodes', form.GridSection, 'node', _('手动节点'));
+		var nodesSec = nv.subsection;
+		nodesSec.addremove = true;
+		nodesSec.sortable = true;
+		nodesSec.anonymous = true;
+		nodesSec.filter = function(id) { return !uci.get('honk', id, 'subscription'); };
+		nodesSec.sectiontitle = function(id) { return uci.get('honk', id, 'name') || id; };
+		o = s.taboption('nodes', form.DummyValue, '_native_hint', _('订阅节点'));
+		o.cfgvalue = function() { return _('订阅节点由内核解析，在“选优”页查看与测试。旧版导入记录保留在 UCI 中作为备份，不重复加载。'); };
 
 		/* 批量导入：honk 直接吃分享链接，不需要像 sing-box 那样逐字段解析 */
 		nodesSec.renderSectionAdd = function() {
@@ -208,7 +186,7 @@ return view.extend({
 											try { name = decodeURIComponent(link.slice(h + 1)); }
 											catch (e) { name = link.slice(h + 1); }
 										}
-										name = name.replace(/[^\w.-]/g, '').slice(0, 24);
+										name = name.replace(/[\r\n]/g, '').trim();
 										if (!name) name = 'node';
 										while (used[name]) name = name.replace(/\d+$/, '') + (++idx);
 										used[name] = 1;
@@ -255,9 +233,7 @@ return view.extend({
 		o.rawhtml = true;
 		o.cfgvalue = function() {
 			return E('div', { 'class': 'cbi-value-description' },
-				_('填写订阅地址，点「更新订阅」下载并解析成节点。' +
-				  '支持纯链接列表和 base64 编码的订阅；解析出的节点名会带上面的 tag 前缀，' +
-				  '方便和手填节点区分。'));
+				_('填写订阅后先保存并应用，再更新已生效订阅。由 honk 原生解析链接、Base64、Clash YAML 和支持的 JSON 订阅；解析失败会显示错误。'));
 		};
 
 		var subv = s.taboption('subs', form.SectionValue, '_subscriptions', form.GridSection, 'subscription', null);
@@ -282,29 +258,17 @@ return view.extend({
 		o.datatype = 'url';
 		o.rmempty = false;
 
-		o = subsSec.option(form.Value, 'tag', _('节点名前缀'));
+		o = subsSec.option(form.Value, 'tag', _('订阅标识'));
 		o.placeholder = 'sub';
 		o.rmempty = true;
 
-		o = s.taboption('subs', form.Button, '_fetch_subs', _('更新订阅'));
-		o.inputtitle = _('立即更新');
-		o.inputstyle = 'apply';
-		o.onclick = function() {
-			var out = E('pre', {
-				'class': 'cbi-input-textarea',
-				'style': 'height:16em;overflow:auto;white-space:pre-wrap;font-family:monospace;font-size:12px;'
-			}, _('正在更新…'));
-			ui.showModal(_('更新订阅'), [out, E('div', { 'class': 'right' },
-				E('button', { 'class': 'btn', 'click': ui.hideModal }, _('关闭')))]);
-			return uci.save().then(function() {
-				return fs.exec('/usr/share/honk/update-subs.sh');
-			}).then(function(res) {
-				out.textContent = (res.stdout || '') + (res.stderr || '');
-				return uci.load('honk');
-			}).then(function() {
-				out.textContent += '\n\n完成，请刷新页面查看节点。';
-			}).catch(function(e) { out.textContent = String(e); });
-		};
+		o = subsSec.option(form.Value, 'interval', _('自动更新间隔（秒）'));
+		o.datatype = 'uinteger'; o.default = '86400';
+		o = subsSec.option(form.Value, 'user_agent', _('订阅 User-Agent'));
+		o.rmempty = true;
+		o = s.taboption('subs', form.DummyValue, '_fetch_subs', _('已生效订阅'));
+		o.rawhtml = true;
+		o.cfgvalue = function() { return honk.renderProviders(); };
 
 		var gv = s.taboption('nodes', form.SectionValue, '_groups', form.GridSection, 'group', null);
 		var groupsSec = gv.subsection;
@@ -317,6 +281,7 @@ return view.extend({
 
 		o = groupsSec.option(form.Value, 'name', _('组名'));
 		o.placeholder = 'proxy';
+		o.validate = function(id, value) { return (/^[A-Za-z_][A-Za-z0-9_-]*$/.test(value) && value !== 'direct' && value !== 'block') || _('组名需使用字母、数字、下划线或连字符，不能使用 direct/block'); };
 		o.rmempty = false;
 
 		o = groupsSec.option(form.ListValue, 'policy', _('策略'));
@@ -337,6 +302,13 @@ return view.extend({
 		});
 		o.rmempty = true;
 
+		o = groupsSec.option(form.DynamicList, 'providers', _('订阅成员'));
+		uci.sections('honk', 'subscription').filter(function(s) { return s.enabled === '1'; }).forEach(function(s) {
+			var tag = s.tag || s.name || s['.name']; o.value(tag, tag);
+		});
+		o.description = _('自动包含选中订阅的节点。成员和订阅成员均留空时，组包含全部节点。');
+		o.rmempty = true;
+
 		o = groupsSec.option(form.Value, 'check_url', _('健康检查地址'));
 		o.placeholder = 'https://www.gstatic.com/generate_204';
 		o.rmempty = true;
@@ -352,7 +324,7 @@ return view.extend({
 		(data.groups || []).forEach(function(g) {
 			o.value(g, _('[组] ') + g);
 		});
-		o.default = 'direct';
+		o.default = 'block';
 		o.rmempty = false;
 
 		/* ================= 多SSID分流 ================= */
@@ -567,71 +539,29 @@ return view.extend({
 			'https://dns.adguard-dns.com/dns-query': 'AdGuard DoH'
 		};
 
-		/* 多选：按选中的顺序重建该角色的上游段。
-		   honk 的 dns.routing 只能指向一个上游，生成器取第一个；其余声明保留备用。 */
-		/* 每个角色只保留一个上游。自定义值在调用方已优先处理。 */
-		function syncOne(role, uri, outbound) {
-			var prefix = role === 'cn' ? 'cn' : 'remote';
-			uci.sections('honk', 'dns_upstream')
-				.filter(function(x) { return x.role === role; })
-				.forEach(function(x) { uci.remove('honk', x['.name']); });
-			if (!uri) return;
-			var sid = prefix + '_1';
-			uci.set('honk', sid, 'dns_upstream');
-			uci.set('honk', sid, 'enabled', '1');
-			uci.set('honk', sid, 'name', sid);
-			uci.set('honk', sid, 'role', role);
-			uci.set('honk', sid, 'uri', uri);
-			if (outbound) uci.set('honk', sid, 'outbound', outbound);
+		function dnsValue(role) {
+			var value = uci.get('honk', 'infra', role + '_dns');
+			if (value !== undefined && value !== null) return value;
+			var old = uci.sections('honk', 'dns_upstream').filter(function(s) { return s.role === role && s.enabled === '1'; });
+			return old.length ? old[0].uri || '' : '';
 		}
-
-		o = ds.taboption('dns_servers', form.ListValue, 'cn_dns', _('国内 DNS'));
-		Object.keys(CN_DNS).forEach(function(k) { o.value(k, CN_DNS[k]); });
-		o.value('custom', _('— 自定义 —'));
-		o.value('', _('（不设置）'));
-		o.default = 'udp://223.5.5.5:53';
-		o.cfgvalue = function() {
-			var v = uci.get('honk', 'infra', 'cn_dns');
-			if (v) return v;
-			var sec = uci.sections('honk', 'dns_upstream').filter(function(x) { return x.role === 'cn' && x.enabled === '1'; });
-			return sec.length ? (sec[0].uri || '') : '';
-		};
-		o.write = function(section_id, value) {
-			uci.set('honk', 'infra', 'cn_dns', value || '');
-			if (value && value !== 'custom') syncOne('cn', value, 'direct');
-		};
-		o.rmempty = true;
-
-		o = ds.taboption('dns_servers', form.Value, 'cn_dns_custom', _('自定义国内 DNS'),
-			_('填完整 URI，例如 udp://223.5.5.5:53 或 https://dns.example/dns-query'));
-		o.placeholder = 'udp://223.5.5.5:53';
-		o.depends('cn_dns', 'custom');
-		o.write = function(section_id, value) { syncOne('cn', value || '', 'direct'); };
-		o.rmempty = true;
-
-		o = ds.taboption('dns_servers', form.ListValue, 'remote_dns', _('国外 DNS'));
-		Object.keys(REMOTE_DNS).forEach(function(k) { o.value(k, REMOTE_DNS[k]); });
-		o.value('custom', _('— 自定义 —'));
-		o.value('', _('（不设置）'));
-		o.default = 'udp://1.1.1.1:53';
-		o.cfgvalue = function() {
-			var v = uci.get('honk', 'infra', 'remote_dns');
-			if (v) return v;
-			var sec = uci.sections('honk', 'dns_upstream').filter(function(x) { return x.role === 'remote' && x.enabled === '1'; });
-			return sec.length ? (sec[0].uri || '') : '';
-		};
-		o.write = function(section_id, value) {
-			uci.set('honk', 'infra', 'remote_dns', value || '');
-			if (value && value !== 'custom') syncOne('remote', value, null);
-		};
-		o.rmempty = true;
-
-		o = ds.taboption('dns_servers', form.Value, 'remote_dns_custom', _('自定义国外 DNS'),
-			_('填完整 URI，例如 udp://1.1.1.1:53 或 https://dns.example/dns-query'));
-		o.placeholder = 'udp://1.1.1.1:53';
-		o.depends('remote_dns', 'custom');
-		o.write = function(section_id, value) { syncOne('remote', value || '', null); };
-		o.rmempty = true;
+		[['cn', CN_DNS, _('国内 DNS')], ['remote', REMOTE_DNS, _('国外 DNS')]].forEach(function(spec) {
+			var role = spec[0], choices = spec[1], key = role + '_dns';
+			var select = ds.taboption('dns_servers', form.ListValue, key, spec[2]);
+			Object.keys(choices).forEach(function(k) { select.value(k, choices[k]); });
+			select.value('custom', _('— 自定义 —')); select.value('', _('（不设置）'));
+			select.rmempty = false;
+			select.cfgvalue = function() { var v = dnsValue(role); return v && !choices[v] ? 'custom' : v; };
+			select.write = function(id, value) { uci.set('honk', 'infra', key, value || ''); };
+			var custom = ds.taboption('dns_servers', form.Value, key + '_custom', _('自定义 DNS URI'));
+			custom.depends(key, 'custom'); custom.rmempty = false;
+			custom.cfgvalue = function() {
+				var v = dnsValue(role);
+				return uci.get('honk', 'infra', key + '_custom') || (v && v !== 'custom' && !choices[v] ? v : '');
+			};
+			custom.write = function(id, value) { uci.set('honk', 'infra', key + '_custom', value); };
+			custom.validate = function(id, value) { return /^(udp|tcp|tls|https):\/\//.test(value) || _('请输入完整 DNS URI'); };
+		});
 
 		/* ---- 高级 ---- */
 		o = ds.taboption('dns_advanced', form.Value, 'max_cache_size', _('缓存条数'),
@@ -726,139 +656,9 @@ return view.extend({
 		};
 		o.placeholder = 'doubleclick.net\nads.example.com\ntracker.example.org';
 
-		/* ================= 选优 ================= */
-		/* 内核的 urltest / score 一直在跑，这里只是把结果拿出来看、把选择改掉。
-		   走 honk-api.sh 而不是前端直接 fetch：rpcd 的 acl 只管 fs.exec。 */
-
-		o = s.taboption('picking', form.DummyValue, '_picking', null);
+		o = s.taboption('picking', form.DummyValue, '_picking', _('节点状态与选择'));
 		o.rawhtml = true;
-		o.cfgvalue = function() {
-			var statusEl = E('div', { 'class': 'cbi-value-description' }, _('正在读取 honk 状态…'));
-			var CTRL_STYLE = 'height:34px;box-sizing:border-box;margin:0;padding:0 8px;';
-			var groupSel = E('select', { 'class': 'cbi-input-select', 'style': CTRL_STYLE + 'width:16em;' });
-			var memberSel = E('select', { 'class': 'cbi-input-select', 'style': CTRL_STYLE + 'width:16em;' });
-			var applyBtn = E('button', {
-				'class': 'btn cbi-button cbi-button-apply',
-				'style': 'height:34px;box-sizing:border-box'
-			}, _('切换'));
-			var table = E('table', { 'class': 'table' }, [
-				E('tr', { 'class': 'tr table-titles' }, [
-					E('th', { 'class': 'th' }, _('节点')),
-					E('th', { 'class': 'th' }, _('延迟')),
-					E('th', { 'class': 'th' }, _('状态'))
-				])
-			]);
-
-			// 后端可能不只有一个字段叫延迟，按优先级取第一个有值的
-			function pickLatency(n) {
-				var cands = [n.latency_ms, n.latencyMs, n.latency, n.last_latency_ms];
-				for (var i = 0; i < cands.length; i++)
-					if (typeof cands[i] === 'number' && isFinite(cands[i]))
-						return Math.round(cands[i]);
-				return null;
-			}
-
-			// fs.exec(command, args)——命令和参数必须分开传。
-			// 拼成一整串会被当成路径，rpcd 找不到就报 NotFoundError。
-			function api() {
-				var args = Array.prototype.slice.call(arguments);
-				return fs.exec('/usr/share/honk/honk-api.sh', args).then(function(res) {
-					if (res.code !== 0)
-						throw new Error((res.stderr || '').trim() || ('exit ' + res.code));
-					return JSON.parse(res.stdout || '{}');
-				});
-			}
-
-			function refresh() {
-				statusEl.textContent = _('正在读取 honk 状态…');
-				return Promise.all([
-					api('groups').catch(function(e) { return { __err: String(e) }; }),
-					api('nodes').catch(function(e) { return { __err: String(e) }; })
-				]).then(function(r) {
-					var groups = r[0], nodes = r[1];
-					if (groups.__err || nodes.__err) {
-						statusEl.style.color = 'red';
-						statusEl.textContent = _('读取失败：honk 没在运行，或者没开原生 API。') +
-							' ' + (groups.__err || nodes.__err);
-						return;
-					}
-
-					statusEl.style.color = 'green';
-					statusEl.textContent = _('已连接 honk 原生 API。');
-
-					var glist = Array.isArray(groups) ? groups : (groups.groups || []);
-					var nlist = Array.isArray(nodes) ? nodes : (nodes.nodes || []);
-
-					groupSel.innerHTML = '';
-					glist.forEach(function(g) {
-						groupSel.appendChild(E('option', { 'value': g.id || g.group_id || g.name },
-							(g.name || g.id || '?') + ' · ' + (g.policy || '')));
-					});
-
-					function fillMembers() {
-						var g = glist.filter(function(x) {
-							return (x.id || x.group_id || x.name) === groupSel.value;
-						})[0];
-						memberSel.innerHTML = '';
-						((g && (g.members || g.direct_members)) || nlist).forEach(function(m) {
-							memberSel.appendChild(E('option', {
-								'value': m.id || m.member_id || m.node_id
-							}, m.name || m.id || '?'));
-						});
-					}
-					groupSel.onchange = fillMembers;
-					fillMembers();
-
-					// 延迟表
-					while (table.rows.length > 1) table.deleteRow(1);
-					(nlist.length ? nlist : []).forEach(function(n) {
-						var ms = pickLatency(n);
-						var healthy = n.healthy !== false && n.alive !== false && !n.error;
-						table.appendChild(E('tr', { 'class': 'tr' }, [
-							E('td', { 'class': 'td' }, n.name || n.id || '?'),
-							E('td', { 'class': 'td' }, ms === null ? '-' : (ms + ' ms')),
-							E('td', { 'class': 'td' },
-								E('span', { 'style': 'color:' + (healthy ? 'green' : 'red') },
-									healthy ? _('可用') : _('不可用')))
-						]));
-					});
-					if (!nlist.length)
-						table.appendChild(E('tr', { 'class': 'tr' },
-							E('td', { 'class': 'td', 'colspan': 3 }, _('还没有节点。'))));
-				}).catch(function(e) {
-					statusEl.style.color = 'red';
-					statusEl.textContent = String(e);
-				});
-			}
-
-			applyBtn.onclick = function(ev) {
-				ev.preventDefault();
-				if (!groupSel.value || !memberSel.value)
-					return;
-				applyBtn.disabled = true;
-				var body = JSON.stringify({ member_id: memberSel.value, network: 'both' });
-				return api('select', groupSel.value, body).then(function() {
-					ui.addNotification(null, E('p', {}, _('已切换。')), 'info');
-					return refresh();
-				}).catch(function(e) {
-					ui.addNotification(null, E('p', {}, _('切换失败：') + e), 'error');
-				}).then(function() { applyBtn.disabled = false; });
-			};
-
-			setTimeout(refresh, 0);
-
-			return E('div', {}, [
-				statusEl,
-				E('div', {
-					'style': 'display:flex;gap:8px;align-items:center;margin:8px 0;' +
-					         'flex-wrap:wrap;justify-content:flex-start;'
-				}, [ groupSel, memberSel, applyBtn ]),
-				table,
-				E('div', { 'class': 'cbi-value-description', 'style': 'margin-top:8px' },
-					_('这里改的是 selector 组的手动选择；urltest 和 score 组会自己做决定，' +
-					  '切过去也会被策略覆盖。要让自动选优生效，把组的策略设成「延迟最低」。'))
-			]);
-		};
+		o.cfgvalue = function() { return honk.renderPicking(); };
 
 		/* ================= 访问控制 ================= */
 
@@ -964,81 +764,9 @@ return view.extend({
 			]);
 		};
 
-		/* 连通性：照 homeproxy 的服务状态页，一张表加一个测试按钮。
-		   honk 没有这类 RPC，跑 probe.sh 拿 "key|ok|毫秒" 再解析。 */
 		o = s.taboption('status', form.DummyValue, '_probe', _('连通性'));
 		o.rawhtml = true;
-		o.cfgvalue = function() {
-			var SITES = [
-				['baidu', _('百度'), 'https://www.baidu.com/'],
-				['bilibili', _('哔哩哔哩'), 'https://www.bilibili.com/'],
-				['jd', _('京东'), 'https://www.jd.com/'],
-				['google', _('Google'), 'https://www.google.com/'],
-				['github', _('GitHub'), 'https://github.com/'],
-				['youtube', _('YouTube'), 'https://www.youtube.com/']
-			];
-
-			var cells = {};
-			var table = E('table', { 'class': 'table' }, [
-				E('tr', { 'class': 'tr table-titles' }, [
-					E('th', { 'class': 'th' }, _('网站')),
-					E('th', { 'class': 'th' }, _('地址')),
-					E('th', { 'class': 'th' }, _('连通')),
-					E('th', { 'class': 'th' }, _('延迟'))
-				])
-			]);
-
-			SITES.forEach(function(site) {
-				var state = E('strong', { 'style': 'color:gray' }, '-');
-				var latency = E('span', {}, '-');
-				cells[site[0]] = { state: state, latency: latency };
-				table.appendChild(E('tr', { 'class': 'tr' }, [
-					E('td', { 'class': 'td' }, site[1]),
-					E('td', { 'class': 'td' }, E('a', {
-						'href': site[2], 'target': '_blank', 'rel': 'noreferrer noopener',
-						'style': 'word-break:break-all'
-					}, site[2])),
-					E('td', { 'class': 'td' }, state),
-					E('td', { 'class': 'td' }, latency)
-				]));
-			});
-
-			var btn = E('button', {
-				'class': 'btn cbi-button cbi-button-action',
-				'click': ui.createHandlerFn(this, function(ev) {
-					ev.preventDefault();
-					btn.disabled = true;
-					btn.textContent = _('测试中…');
-					return fs.exec('/usr/share/honk/probe.sh').then(function(res) {
-						String(res.stdout || '').split('\n').forEach(function(line) {
-							var p = line.split('|');
-							if (p.length < 2) return;
-							var c = cells[p[0]];
-							if (!c) return;
-							if (p[1] === 'ok') {
-								c.state.style.color = 'green';
-								c.state.textContent = _('通');
-								c.latency.textContent = p[2] + ' ms';
-							} else {
-								c.state.style.color = 'red';
-								c.state.textContent = _('不通');
-								c.latency.textContent = p[2] || '';
-							}
-						});
-					}).catch(function(e) {
-						ui.addNotification(null, E('p', {}, String(e)), 'error');
-					}).then(function() {
-						btn.disabled = false;
-						btn.textContent = _('测试');
-					});
-				})
-			}, _('测试'));
-
-			return E('div', {}, [
-				E('div', { 'style': 'margin-bottom:8px' }, [ btn ]),
-				table
-			]);
-		};
+		o.cfgvalue = function() { return honk.renderConnection(); };
 
 		/* 资源：geo 数据在不在、多大、什么时候更新的 */
 		o = s.taboption('status', form.DummyValue, '_res', _('规则资源'));
@@ -1069,7 +797,8 @@ return view.extend({
 						E('button', { 'class': 'btn', 'click': ui.hideModal }, _('关闭')))]);
 					return fs.exec('/usr/share/honk/update-geo.sh').then(function(res) {
 						out.textContent = (res.stdout || '') + (res.stderr || '');
-						return L.resolveDefault(fs.exec('/etc/init.d/honk reload'), {});
+						if (res.code !== 0) throw new Error(res.stderr || _('规则下载失败'));
+						return honk.reload();
 					}).then(function() {
 						out.textContent += '\n\nhonk 已重载。';
 					}).catch(function(e) { out.textContent = String(e); });
@@ -1115,7 +844,8 @@ return view.extend({
 					'font-family:monospace;font-size:12px;margin:0;'
 			}, data.log || _('（暂无日志）'));
 			poll.add(function() {
-				return fs.read('/var/log/honk.log').then(function(txt) {
+				return fs.exec('/usr/share/honk/log-tail.sh').then(function(res) {
+					var txt = res.stdout;
 					box.textContent = txt || _('（暂无日志）');
 					box.scrollTop = box.scrollHeight;
 				}).catch(function() {});
@@ -1204,11 +934,9 @@ return view.extend({
 		o.inputtitle = _('重新生成');
 		o.inputstyle = 'apply';
 		o.onclick = function() {
-			return uci.save().then(function() {
-				return uci.apply();
-			}).then(function() {
-				ui.addNotification(null, E('p', {}, _('配置已应用，honk 已重载。')), 'info');
-			});
+			return honk.reload().then(function() {
+				ui.addNotification(null, E('p', {}, _('已重新载入已保存的配置。未保存的表单请使用“保存并应用”。')), 'info');
+			}).catch(function(e) { ui.addNotification(null, E('p', {}, e.message), 'error'); });
 		};
 
 		/* 自定义路由规则 */
@@ -1273,12 +1001,14 @@ return view.extend({
 			});
 		}
 
+		var applyStatus = honk.renderApplyStatus();
 		refreshBanner();
 		poll.add(refreshBanner, 10);
 
 		return m.render().then(function(el) {
 			// HomeProxy 的排版：标题 → 副标题 → 状态行 → 选项卡。
 			// 所以在副标题后面插入，而不是整页最前面。
+			el.appendChild(applyStatus);
 			var anchor = el.querySelector('.cbi-map-descr');
 			if (anchor && anchor.nextSibling)
 				el.insertBefore(_statusBanner, anchor.nextSibling);

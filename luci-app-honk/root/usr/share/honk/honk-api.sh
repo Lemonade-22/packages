@@ -1,53 +1,34 @@
 #!/bin/sh
-#
-# 封装 honk 原生 API。前端不直接发 HTTP —— 那样要处理认证和 CORS，
-# 而且 rpcd 的 acl 只管 fs.exec，不管 fetch。
-#
-#   honk-api.sh nodes              列出节点及其测量
-#   honk-api.sh groups             列出组及其健康状态
-#   honk-api.sh probe <json>       主动探测
-#   honk-api.sh select <组> <json> 设置组的 TCP/UDP 选择
-#
-# 输出原样透传 JSON，解析交给前端。
+# beta.6 native API adapter. Each request stays below LuCI's RPC deadline.
 set -u
-
-PORT="$(uci -q get honk.infra.native_api_port)"
-[ -n "$PORT" ] || PORT="9527"
-BASE="http://127.0.0.1:${PORT}/api/v1"
-
-CURL_OPTS="-fsS --connect-timeout 3 --max-time 20"
-
-cmd="${1:-}"
-
-case "$cmd" in
-	nodes)
-		curl $CURL_OPTS "$BASE/nodes"
-		;;
-	groups)
-		curl $CURL_OPTS "$BASE/groups"
-		;;
-	group)
-		[ -n "${2:-}" ] || { echo '{"error":"missing group id"}'; exit 1; }
-		curl $CURL_OPTS "$BASE/groups/${2}"
-		;;
-	probe)
-		[ -n "${2:-}" ] || { echo '{"error":"missing json body"}'; exit 1; }
-		curl $CURL_OPTS -X POST -H 'Content-Type: application/json' \
-			-d "${2}" "$BASE/probes"
-		;;
-	select)
-		[ -n "${2:-}" ] && [ -n "${3:-}" ] || {
-			echo '{"error":"usage: select <group> <json>"}'
-			exit 1
-		}
-		curl $CURL_OPTS -X PUT -H 'Content-Type: application/json' \
-			-d "${3}" "$BASE/groups/${2}/selection"
-		;;
-	runtime)
-		curl $CURL_OPTS "$BASE/runtime?detail=summary"
-		;;
-	*)
-		echo '{"error":"usage: honk-api.sh nodes|groups|group <id>|probe <json>|select <group> <json>|runtime"}'
-		exit 1
-		;;
+PORT="$(cat /var/run/honk/api-port 2>/dev/null)"
+[ -n "$PORT" ] || PORT="$(uci -q get honk.infra.native_api_port)"
+[ -n "$PORT" ] || PORT=9527
+case "$PORT" in *[!0-9]*) exit 1 ;; esac
+BASE="http://127.0.0.1:$PORT/api/v1"
+request() { curl --fail-with-body -sS --connect-timeout 2 --max-time 8 "$@"; }
+id() {
+ case "${1:-}" in ''|*[!a-zA-Z0-9_-]*) echo '{"error":{"message":"Invalid resource ID"}}'; exit 1 ;; esac
+}
+case "${1:-}" in
+ nodes|providers)
+  if [ -n "${2:-}" ]; then
+   request --get --data-urlencode 'limit=100' --data-urlencode "cursor=$2" "$BASE/$1"
+  else
+   request "$BASE/$1?limit=100"
+  fi ;;
+ groups|runtime|config) request "$BASE/$1" ;;
+ group) id "${2:-}"; request "$BASE/groups/$2" ;;
+ operation) id "${2:-}"; request "$BASE/operations/$2" ;;
+ provider-refresh) id "${2:-}"; request -X POST "$BASE/providers/$2/refresh" ;;
+ probe) request -H 'Content-Type: application/json' --data-binary "$2" "$BASE/probes" ;;
+ select)
+  id "${2:-}"
+  request -X PUT -H 'Content-Type: application/json' --data-binary "$3" "$BASE/groups/$2/selection" ;;
+ clear-selection) id "${2:-}"; request -X DELETE "$BASE/groups/$2/selection?network=both" ;;
+ reload) request -X POST -H 'Content-Type: application/json' -d '{}' "$BASE/operations/reload" ;;
+ validate)
+  ucode -e 'import { readfile } from "fs"; const text = readfile(ARGV[0]); if (text === null) exit(1); print(sprintf("%J", {mode:"full",sources:[{id:"candidate",content:text}]}));' "$2" |
+   request -H 'Content-Type: application/json' --data-binary @- "$BASE/config/validate" ;;
+ *) echo '{"error":{"message":"Unknown honk API operation"}}'; exit 1 ;;
 esac
