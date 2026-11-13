@@ -66,8 +66,12 @@ config node 'sample'
 # 这个 proxy 是示例组，成员留空，装好后自己加节点再填。
 config group 'proxy'
 	option name 'proxy'
+	# urltest 按实测延迟自动挑最快的；score 依赖 check_url 探测，
+	# 而 gstatic 这类域名要先解析、解析又依赖代理，探测会永远失败，
+	# 最后回退到 final: direct，表现就是"节点都在但从头到尾不走代理"。
 	option policy 'urltest'
-	option check_url 'https://www.gstatic.com/generate_204'
+	# 探测地址用 IP，不依赖 DNS。用域名会陷入同一个鸡生蛋。
+	option check_url 'http://1.1.1.1'
 	option tolerance '50'
 	option final 'direct'
 

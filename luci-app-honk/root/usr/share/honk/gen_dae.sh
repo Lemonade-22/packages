@@ -50,6 +50,12 @@ LAN_IF="$(q infra.lan_interface)"
 WAN_IF="$(q infra.wan_interface)"
 LOG_LEVEL="$(q infra.log_level)"
 BOOTSTRAP="$(q infra.bootstrap_resolver)"
+# 老的单值字段：没有 dns_upstream section 时用它们兜底。
+# 之前只认 section，导致 upstream{} 生成成空块、fallback: reject，全网解析不了。
+CN_DNS="$(q infra.cn_dns)"
+CN_DNS_CUSTOM="$(q infra.cn_dns_custom)"
+REMOTE_DNS="$(q infra.remote_dns)"
+REMOTE_DNS_CUSTOM="$(q infra.remote_dns_custom)"
 DNS_BIND="$(q infra.bind)"
 DNS_IPVER="$(q infra.ipversion_prefer)"
 DNS_ECS="$(q infra.client_subnet)"
@@ -176,7 +182,10 @@ $(ip -6 -o addr show scope global 2>/dev/null | awk '{print $4}' | cut -d/ -f1)"
       echo "    sip($_src) && dip($_a) && !dport(53) -> direct(must)"
     done
   fi
-  # 路由器自己发起的 DNS 查询不能被绕回 honk，否则成环
+  # Router 自己的 DNS 交给 dnsmasq，不要绕回 honk。
+  # 注意：不能让 53 走 direct —— 明文 DNS 在国内全是投毒结果
+  # （google 会解析成 Twitter / Facebook 的 IP 段），必须由 honk
+  # 用加密上游解析，那才是能拿到真实地址的唯一路子。
   echo "    pname(dnsmasq) -> direct"
 
   target="direct"
@@ -298,6 +307,25 @@ $(ip -6 -o addr show scope global 2>/dev/null | awk '{print $4}' | cut -d/ -f1)"
       *) [ -z "$remote_up" ] && remote_up="$uname" ;;
     esac
   done
+
+  # 一个 dns_upstream section 都没有时，退回 infra 里的单值字段。
+  # 自定义框优先于预设项。
+  if [ -z "$cn_up" ] && [ -z "$remote_up" ]; then
+    cn_fb="${CN_DNS_CUSTOM:-${CN_DNS:-}}"
+    rm_fb="${REMOTE_DNS_CUSTOM:-${REMOTE_DNS:-}}"
+    [ -n "$rm_fb" ] || rm_fb="${CN_DNS_CUSTOM:-${CN_DNS:-}}"
+    if [ -n "$cn_fb" ]; then
+      echo "        cn_dns: '$(sq "$cn_fb")'"
+      cn_up="cn_dns"
+    fi
+    if [ -n "$rm_fb" ] && [ "$rm_fb" != "$cn_fb" ]; then
+      echo "        remote_dns: '$(sq "$rm_fb")'"
+      remote_up="remote_dns"
+    elif [ -n "$rm_fb" ]; then
+      remote_up="cn_dns"
+    fi
+  fi
+
   echo "    }"
   echo "    routing {"
   echo "        request {"
