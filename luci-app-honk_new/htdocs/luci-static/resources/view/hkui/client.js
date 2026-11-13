@@ -5,7 +5,7 @@
 'require ui';
 'require fs';
 'require poll';
-'require honk_new';
+'require hkui';
 
 /*
  * luci-app-honk_new · 客户端设置

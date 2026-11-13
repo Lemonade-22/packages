@@ -5,7 +5,7 @@
 'require ui';
 'require fs';
 'require poll';
-'require honk_new';
+'require hkui';
 
 /*
  * luci-app-honk_new · 节点设置
@@ -22,9 +22,9 @@ return view.extend({
 	load: function() {
 		return Promise.all([
 			uci.load('honk_new'),
-			honk_new.nodes().catch(function() { return []; }),
-			honk_new.providers().catch(function() { return []; }),
-			honk_new.api('groups').catch(function() { return []; })
+			hkui.nodes().catch(function() { return []; }),
+			hkui.providers().catch(function() { return []; }),
+			hkui.api('groups').catch(function() { return []; })
 		]).then(function(res) {
 			var manual = uci.sections('honk_new', 'node').filter(function(n) {
 				return !n.subscription && (n.uri || '').length > 0;
@@ -235,7 +235,7 @@ return view.extend({
 		/* 运行中的分组状态 */
 		o = s.taboption('groups', form.DummyValue, '_group_runtime', _('运行状态'));
 		o.rawhtml = true;
-		o.cfgvalue = function() { return honk_new.renderPicking(); };
+		o.cfgvalue = function() { return hkui.renderPicking(); };
 
 		/* ================= 订阅 ================= */
 
@@ -277,7 +277,7 @@ return view.extend({
 
 		o = s.taboption('subs', form.DummyValue, '_providers', _('已生效订阅'));
 		o.rawhtml = true;
-		o.cfgvalue = function() { return honk_new.renderProviders(); };
+		o.cfgvalue = function() { return hkui.renderProviders(); };
 
 		return m.render();
 	}
@@ -335,7 +335,7 @@ function renderRuntimeNodes(data) {
 			cell.textContent = _('测试中…');
 			cell.style.color = 'gray';
 
-			honk_new.api('probe', JSON.stringify({ node_id: n.id, timeout_ms: 6000 }))
+			hkui.api('probe', JSON.stringify({ node_id: n.id, timeout_ms: 6000 }))
 				.then(function(r) {
 					var ms = r && (r.latency_ms != null ? r.latency_ms : (r.result && r.result.latency_ms));
 					if (typeof ms === 'number') {

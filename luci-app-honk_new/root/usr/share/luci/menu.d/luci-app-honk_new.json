@@ -10,28 +10,28 @@
 			"uci": { "honk_new": true }
 		}
 	},
-	"admin/services/honk_new/client": {
+	"admin/services/hkui/client": {
 		"title": "客户端设置",
 		"order": 10,
 		"action": {
 			"type": "view",
-			"path": "honk_new/client"
+			"path": "hkui/client"
 		}
 	},
-	"admin/services/honk_new/node": {
+	"admin/services/hkui/node": {
 		"title": "节点设置",
 		"order": 20,
 		"action": {
 			"type": "view",
-			"path": "honk_new/node"
+			"path": "hkui/node"
 		}
 	},
-	"admin/services/honk_new/status": {
+	"admin/services/hkui/status": {
 		"title": "服务状态",
 		"order": 30,
 		"action": {
 			"type": "view",
-			"path": "honk_new/status"
+			"path": "hkui/status"
 		}
 	}
 }
