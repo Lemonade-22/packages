@@ -542,17 +542,22 @@ return view.extend({
 		function dnsValue(role) {
 			var value = uci.get('honk', 'infra', role + '_dns');
 			if (value !== undefined && value !== null) return value;
+			// 只有字段完全不存在（旧安装）才回落到 dns_upstream section。
+			// 新版本会写 'none' 占位，所以字段存在即代表用户已明确表过态。
 			var old = uci.sections('honk', 'dns_upstream').filter(function(s) { return s.role === role && s.enabled === '1'; });
-			return old.length ? old[0].uri || '' : '';
+			return old.length ? old[0].uri || '' : 'none';
 		}
 		[['cn', CN_DNS, _('国内 DNS')], ['remote', REMOTE_DNS, _('国外 DNS')]].forEach(function(spec) {
 			var role = spec[0], choices = spec[1], key = role + '_dns';
 			var select = ds.taboption('dns_servers', form.ListValue, key, spec[2]);
 			Object.keys(choices).forEach(function(k) { select.value(k, choices[k]); });
-			select.value('custom', _('— 自定义 —')); select.value('', _('（不设置）'));
+			// "不设置"必须写成哨兵值。UCI 不会保存空字符串 option，
+			// 写空串等于把这行删掉，生成器还以为用户在用旧版 section 配置，
+			// 于是清空之后旧上游又冒出来。
+			select.value('custom', _('— 自定义 —')); select.value('none', _('（不设置）'));
 			select.rmempty = false;
 			select.cfgvalue = function() { var v = dnsValue(role); return v && !choices[v] ? 'custom' : v; };
-			select.write = function(id, value) { uci.set('honk', 'infra', key, value || ''); };
+			select.write = function(id, value) { uci.set('honk', 'infra', key, value || 'none'); };
 			var custom = ds.taboption('dns_servers', form.Value, key + '_custom', _('自定义 DNS URI'));
 			custom.depends(key, 'custom'); custom.rmempty = false;
 			custom.cfgvalue = function() {

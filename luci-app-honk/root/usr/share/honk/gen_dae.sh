@@ -127,6 +127,18 @@ mkdir -p "$(dirname "$OUT")" || exit 1
 
   printf '%s\n' "$NODE_CONFIG"
 
+  # 是否有任何可用的 DNS 上游。两个角色都选"（不设置）"且没有旧 section 时，
+  # 就完全不托管 DNS：既不生成 dns 块，也要把 53 直通出去。
+  # 以前这种情况会生成 fallback: reject，等于把用户所有解析都掐死。
+  DNS_ANY=0
+  case "$CN_DNS" in none|'') ;; *) DNS_ANY=1 ;; esac
+  case "$REMOTE_DNS" in none|'') ;; *) DNS_ANY=1 ;; esac
+  # 只有两个字段压根不存在（空 = 尚未写过，属旧安装）才看旧 section。
+  # 写成 none 是用户的明确表态，不能被旧 section 顶回来。
+  if [ -z "$CN_DNS" ] && [ -z "$REMOTE_DNS" ] && [ -n "$(sections dns_upstream)" ]; then
+    DNS_ANY=1
+  fi
+
   echo "routing {"
   # 旁路由（单臂路由）拓扑下，上游和下游是同一个接口。honk 如果只按默认路由
   # 认出口，会把 br-lan 当成 WAN，连路由器自己的 SSH / LuCI / DNS 一起劫走，
@@ -263,9 +275,15 @@ $(ip -6 -o addr show scope global 2>/dev/null | awk '{print $4}' | cut -d/ -f1)"
       echo "    fallback: $target"
     fi
   fi
+  # 不托管 DNS 就把 53 整段交还系统。必须在 dport() 的代理规则之前，
+  # must 会终结规则搜索，否则 DNS 仍会被透明代理接走。
+  if [ "$DNS_ANY" = "0" ]; then
+    echo "    dport(53) -> direct(must)"
+  fi
   echo "}"
   echo
 
+  if [ "$DNS_ANY" = "1" ]; then
   echo "dns {"
   [ -n "$DNS_BIND" ] && echo "    bind: '$(sq "$DNS_BIND")'"
   case "$DNS_IPVER" in
@@ -307,8 +325,10 @@ $(ip -6 -o addr show scope global 2>/dev/null | awk '{print $4}' | cut -d/ -f1)"
   done
 
   # 单选字段是唯一的新配置源；旧安装仅在字段不存在时读取旧 section。
-  case "$CN_DNS" in custom) cn_fb="$CN_DNS_CUSTOM" ;; *) cn_fb="$CN_DNS" ;; esac
-  case "$REMOTE_DNS" in custom) rm_fb="$REMOTE_DNS_CUSTOM" ;; *) rm_fb="$REMOTE_DNS" ;; esac
+  # none 是"明确不设置"的哨兵值：UCI 存不住空串，靠空值表达这个状态会被
+  # 当成"字段不存在"，然后回落到旧 dns_upstream，用户看到的就是清空后又自己冒回来。
+  case "$CN_DNS" in none) cn_fb="" ;; custom) cn_fb="$CN_DNS_CUSTOM" ;; *) cn_fb="$CN_DNS" ;; esac
+  case "$REMOTE_DNS" in none) rm_fb="" ;; custom) rm_fb="$REMOTE_DNS_CUSTOM" ;; *) rm_fb="$REMOTE_DNS" ;; esac
   if [ -n "$cn_fb" ]; then
     echo "        cn_dns: '$(sq "$cn_fb")' -> direct"
     cn_up="cn_dns"
@@ -373,6 +393,7 @@ $(ip -6 -o addr show scope global 2>/dev/null | awk '{print $4}' | cut -d/ -f1)"
   echo "        }"
   echo "    }"
   echo "}"
+  fi
 
   # experimental 下可能同时要 cache_file 和 native_api，
   # 必须攒到一起写，不能各写一个 experimental 块（重复块后者会覆盖前者）。
