@@ -101,14 +101,26 @@ function renderConnection() {
  * 缩进，跟上面的 GridSection 表头对不齐。这里藏掉标签列、内容列拉满。
  */
 function fullRow(node) {
-	var p = node;
-	while (p && !(p.classList && p.classList.contains('cbi-value')))
-		p = p.parentNode;
-	if (p) {
-		var t = p.querySelector('.cbi-value-title');
-		if (t) t.style.display = 'none';
-		var f = p.querySelector('.cbi-value-field');
-		if (f) { f.style.marginLeft = '0'; f.style.width = '100%'; }
+	node.style.width = '100%';
+
+	// 往上找到 .cbi-value 那一行，把标签列收掉、内容列拉满。
+	// 内容是 DummyValue 渲染出来的，它落在 <output> 里，而不是 .cbi-value-field，
+	// 所以不能只处理那一个 class —— 得把它下面的直接子元素都铺开。
+	var row = node;
+	while (row && !(row.classList && row.classList.contains('cbi-value')))
+		row = row.parentNode;
+
+	if (row) {
+		var title = row.querySelector('.cbi-value-title');
+		if (title) title.style.display = 'none';
+
+		Array.prototype.forEach.call(row.children, function(child) {
+			if (child === title) return;
+			child.style.width = '100%';
+			child.style.marginLeft = '0';
+			child.style.flex = '1 1 auto';
+			child.style.minWidth = '0';
+		});
 	}
 	return node;
 }

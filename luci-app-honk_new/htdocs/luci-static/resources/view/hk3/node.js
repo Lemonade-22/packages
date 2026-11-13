@@ -348,6 +348,18 @@ return view.extend({
 		return m.render().then(function(el) {
 			hk3.mountStatusBanner(el);
 
+			// fullRow 在 cfgvalue 里执行时元素还没进 DOM，往上找不到 .cbi-value，
+			// 宽度那一步只能等渲染完再做。不设的话表格被 <output> 固定成 400px，
+			// 右边留一大片空白。
+			Array.prototype.forEach.call(el.querySelectorAll('.cbi-value > output'), function(out) {
+				out.style.flex = '1 1 auto';
+				out.style.width = '100%';
+				out.style.minWidth = '0';
+			});
+
+			// m.render() 只生成表单本身，主题的 .cbi-page-actions 是在这之后
+			// 才挂上去的，所以这里立刻找是找不到的，得等一帧。
+			window.setTimeout(function() { mountTestAll(el); }, 0);
 			return el;
 		});
 	}
@@ -359,16 +371,105 @@ return view.extend({
  * 明显缩进，跟上面 GridSection 的表头对不齐。这里把标签列藏掉、内容列拉满。
  */
 function fullRow(node) {
-	var p = node;
-	while (p && !(p.classList && p.classList.contains('cbi-value')))
-		p = p.parentNode;
-	if (p) {
-		var t = p.querySelector('.cbi-value-title');
-		if (t) t.style.display = 'none';
-		var f = p.querySelector('.cbi-value-field');
-		if (f) { f.style.marginLeft = '0'; f.style.width = '100%'; }
+	node.style.width = '100%';
+
+	// 往上找到 .cbi-value 那一行，把标签列收掉、内容列拉满。
+	// 内容是 DummyValue 渲染出来的，它落在 <output> 里，而不是 .cbi-value-field，
+	// 所以不能只处理那一个 class —— 得把它下面的直接子元素都铺开。
+	var row = node;
+	while (row && !(row.classList && row.classList.contains('cbi-value')))
+		row = row.parentNode;
+
+	if (row) {
+		var title = row.querySelector('.cbi-value-title');
+		if (title) title.style.display = 'none';
+
+		Array.prototype.forEach.call(row.children, function(child) {
+			if (child === title) return;
+			child.style.width = '100%';
+			child.style.marginLeft = '0';
+			child.style.flex = '1 1 auto';
+			child.style.minWidth = '0';
+		});
 	}
 	return node;
+}
+
+/*
+ * 页面底部左侧的「测试所有节点」，测的是当前显示的那个列表 ——
+ * 在「手动节点」下就测手动的，在「V6B」下就测 V6B 的。
+ *
+ * 串行而不并发：71 个节点同时探，路由器的 conntrack 和出口会被打满，
+ * 结果全变超时，反而看不出哪个节点是好的。
+ */
+function mountTestAll(el) {
+	// .cbi-page-actions 不在 #cbi-honk_new 里面，是主题在 map 外面单独放的，
+	// 所以不能从 el 往下找。
+	var actions = document.querySelector('.cbi-page-actions');
+	if (!actions) {
+		// 主题可能还没把按钮区挂上，再等一轮
+		window.setTimeout(function() { mountTestAll(el); }, 200);
+		return;
+	}
+
+	var btn = E('button', {
+		'class': 'btn cbi-button',
+		'style': 'margin-right:8px'
+	}, _('测试所有节点'));
+
+	var running = false;
+
+	btn.addEventListener('click', function(ev) {
+		ev.preventDefault();
+		if (running) return;
+
+		// 只取当前可见的那个列表里的测试按钮
+		var panes = Array.prototype.slice.call(el.querySelectorAll('[id^="cbi-honk_new-config-_nodes_"]'));
+		var pane = panes.filter(function(p) { return p.offsetParent !== null; })[0];
+		if (!pane) return;
+
+		var probes = Array.prototype.slice.call(pane.querySelectorAll('button.honk-probe'));
+		if (!probes.length) return;
+
+		running = true;
+		var i = 0;
+		var label = btn.textContent;
+
+		btn.disabled = true;
+		btn.textContent = _('测试中 0/') + probes.length;
+
+		function step() {
+			if (i >= probes.length) {
+				running = false;
+				btn.disabled = false;
+				btn.textContent = label;
+				return;
+			}
+			btn.textContent = _('测试中 ') + (i + 1) + '/' + probes.length;
+
+			// 单行按钮自己知道怎么测，这里只管按顺序点，等它把结果写回单元格
+			var cell = probes[i].parentNode.previousSibling;
+			var before = cell ? cell.textContent : '';
+			probes[i].click();
+			i++;
+
+			var waited = 0;
+			(function poll() {
+				var now = cell ? cell.textContent : '';
+				// 单元格离开「测试中…」就算有结果了；最多等 12 秒
+				if ((now !== before && now.indexOf(_('测试中')) < 0) || waited > 60) {
+					step();
+				} else {
+					waited++;
+					setTimeout(poll, 200);
+				}
+			})();
+		}
+
+		step();
+	});
+
+	actions.insertBefore(btn, actions.firstChild);
 }
 
 /*
@@ -400,8 +501,12 @@ function renderProviderNodes(data, tag) {
 			[_('名称'), _('延迟'), _('测试'), _('类型')].map(function(t) {
 				// 滚动容器的表头必须吸顶，否则往下滚时它会跟着内容走，
 				// 看起来就像标题栏错位到数据行中间。
-				return E('th', { 'class': 'th',
-					'style': 'position:sticky;top:0;z-index:2;background:var(--background-color-high,#fff);' }, t);
+				// border-collapse 下 sticky 的 th 会丢掉自己的边框，滚动时那一行
+				// 就变成一条空白。用 inset box-shadow 把上下边框画回来。
+				return E('th', { 'class': 'th', 'style':
+					'position:sticky;top:0;z-index:2;' +
+					'background:var(--background-color-high,#fff);' +
+					'box-shadow:inset 0 -1px 0 rgba(0,0,0,.14),inset 0 1px 0 rgba(0,0,0,.14);' }, t);
 			})));
 
 	if (!rows.length) {
@@ -413,7 +518,8 @@ function renderProviderNodes(data, tag) {
 
 	rows.slice(0, 200).forEach(function(n) {
 		var cell = E('td', { 'class': 'td' }, _('未测'));
-		var btn = E('button', { 'class': 'btn', 'style': 'padding:1px 8px;font-size:12px' }, _('测试'));
+		var btn = E('button', { 'class': 'btn honk-probe', 'style': 'padding:1px 8px;font-size:12px',
+			'data-node': n.id }, _('测试'));
 		var addr = n.address || (n.server || '') + (n.port ? ':' + n.port : '');
 
 		var h = (n.health || []).filter(function(x) { return x.purpose === 'data' && x.state === 'healthy'; })[0];
@@ -455,5 +561,5 @@ function renderProviderNodes(data, tag) {
 		]));
 	});
 
-	return fullRow(E('div', { 'style': 'max-height:32em;overflow:auto;position:relative' }, table));
+	return fullRow(E('div', { 'style': 'width:100%;max-height:32em;overflow:auto;position:relative' }, table));
 }
