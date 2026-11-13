@@ -334,8 +334,18 @@ mkdir -p "$(dirname "$OUT")" || exit 1
       ab_batch=""
       ab_n=0
       while IFS= read -r ab_d; do
-        ab_d="$(printf '%s' "$ab_d" | tr -d '[:space:]')"
+        # 不能用 tr -d '[:space:]'：busybox 的 tr 不展开这个字符类，
+        # 它会按字面把 [ : s p a c e ] 这些字符删掉，
+        # 0.myikas.com 就变成 0.myik.om，域名全废。
+        ab_d="$(printf '%s' "$ab_d" | tr -d ' \t\r')"
         case "$ab_d" in ''|'#'*) continue ;; esac
+        # 空后缀会让内核拒绝整份配置（DNS policy contains an empty suffix
+        # domain matcher），整台机器就起不来。只放行看起来是域名的条目。
+        case "$ab_d" in
+          .*|*.|*[!A-Za-z0-9._-]*) continue ;;
+          *.*) ;;
+          *) continue ;;
+        esac
         if [ -z "$ab_batch" ]; then
           ab_batch="suffix: $ab_d"
         else
