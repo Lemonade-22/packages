@@ -131,14 +131,39 @@ return view.extend({
 
 		/* ================= 节点与分组 ================= */
 
-		var nv = s.taboption('nodes', form.SectionValue, '_nodes', form.GridSection, 'node', null);
-		var nodesSec = nv.subsection;
-		nodesSec.addremove = true;
-		nodesSec.sortable = true;
-		nodesSec.anonymous = true;
-		nodesSec.sectiontitle = function(section_id) {
-			return uci.get('honk', section_id, 'name') || section_id;
-		};
+		/* 节点按来源订阅分表显示：一个订阅一张表，标题就是订阅名。
+		   手动添加的（没有 subscription 字段）单独一张表放最后。 */
+		var subTags = [];
+		uci.sections('honk', 'node').forEach(function(n) {
+			var t = String(n.subscription || '').trim();
+			if (t && subTags.indexOf(t) < 0)
+				subTags.push(t);
+		});
+		subTags.push('');
+
+		var manualSec = null;
+
+		subTags.forEach(function(tag, ti) {
+			var title = tag ? tag : _('手动添加');
+			var nv = s.taboption('nodes', form.SectionValue, '_nodes' + ti, form.GridSection, 'node', title);
+			var nodesSec = nv.subsection;
+			nodesSec.addremove = true;
+			nodesSec.sortable = true;
+			nodesSec.anonymous = true;
+			nodesSec.sectiontitle = function(section_id) {
+				return uci.get('honk', section_id, 'name') || section_id;
+			};
+			// 只显示属于本订阅的节点
+			nodesSec.filter = function(section_id) {
+				var t = String(uci.get('honk', section_id, 'subscription') || '').trim();
+				return t === tag;
+			};
+			if (tag === '')
+				manualSec = nodesSec;
+		});
+
+		// subTags 里一定有一个空串，所以 manualSec 必然被赋值
+		var nodesSec = manualSec;
 
 		/* 批量导入：honk 直接吃分享链接，不需要像 sing-box 那样逐字段解析 */
 		nodesSec.renderSectionAdd = function() {

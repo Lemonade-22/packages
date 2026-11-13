@@ -136,6 +136,8 @@ for s in $sections; do
 		uci -q set "$CONF.$sid.enabled=1"
 		uci -q set "$CONF.$sid.name=$nm"
 		uci -q set "$CONF.$sid.uri=$link"
+		# 记来源订阅，节点页按这个字段分组显示
+		uci -q set "$CONF.$sid.subscription=$tag"
 	done < "$links"
 
 	echo "  imported $idx nodes"
