@@ -1,0 +1,83 @@
+{
+	"luci-app-honk_new": {
+		"description": "Grant access to honk configuration",
+		"read": {
+			"file": {
+				"/etc/honk_new/config.dae": [
+					"read"
+				],
+				"/etc/honk_new/custom.rules": [
+					"read"
+				],
+				"/etc/honk_new/adblock.list": [
+					"read"
+				],
+				"/var/log/honk_new.log": [
+					"read"
+				],
+				"/usr/share/honk_new/honk-status.sh": [
+					"exec"
+				],
+				"/usr/share/honk_new/dash-status.sh": [
+					"exec"
+				],
+				"/usr/share/honk_new/honk-read.sh": [
+					"exec"
+				],
+				"/usr/share/honk_new/log-tail.sh": [
+					"exec"
+				],
+				"/var/run/honk_new/apply.json": [
+					"read"
+				],
+				"/var/run/honk_new/validation.json": [
+					"read"
+				],
+				"/usr/share/honk_new/geo/*": [
+					"stat"
+				]
+			},
+			"ubus": {
+				"service": [
+					"list"
+				],
+				"luci.honk_new": [
+					"connection_check"
+				]
+			},
+			"uci": [
+				"honk_new",
+				"network",
+				"wireless"
+			]
+		},
+		"write": {
+			"file": {
+				"/etc/honk_new/config.dae": [
+					"write"
+				],
+				"/etc/honk_new/custom.rules": [
+					"write"
+				],
+				"/etc/honk_new/adblock.list": [
+					"write"
+				],
+				"/usr/share/honk_new/update-adblock.sh": [
+					"exec"
+				],
+				"/usr/share/honk_new/update-geo.sh": [
+					"exec"
+				],
+				"/usr/share/honk_new/honk-api.sh": [
+					"exec"
+				],
+				"/etc/init.d/honk_new": [
+					"exec"
+				]
+			},
+			"uci": [
+				"honk_new"
+			]
+		}
+	}
+}

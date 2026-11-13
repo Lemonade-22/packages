@@ -1,0 +1,79 @@
+# luci-app-honk_new 的唯一配置源。LuCI 只写这里，/etc/honk_new/config.dae 由 gen_dae.sh 生成。
+
+config honk 'config'
+	option enabled '0'
+	option main_group 'nil'
+	option routing_mode 'bypass_mainland_china'
+	option routing_port 'common'
+	option ipv6_mode 'block'
+	option quic_mode 'block'
+	option custom_rules_enabled '0'
+	# 自定义规则存在独立文件里（一行一条），UCI option 装不下多行
+	option custom_rules_file '/etc/honk_new/custom.rules'
+
+config honk 'infra'
+	option data_dir '/var/lib/honk_new'
+	option log_level 'info'
+	option bootstrap_resolver '1.1.1.1:53'
+	option geo_asset_dir '/usr/share/honk_new/geo'
+# 首次安装留空给用户自己选；br-lan 不存在时这里不填
+	option lan_interface 'br-lan'
+	option wan_interface 'auto'
+	option bind ''
+	option ipversion_prefer ''
+	option client_subnet ''
+	option max_cache_size '10000'
+	option optimistic_cache '1'
+	option optimistic_cache_ttl '600'
+	option optimistic_stale_reply_ttl '30'
+	option cache_file '1'
+	# 原生 API：只绑回环、匿名访问，用于看节点延迟和手动切换
+	option native_api '1'
+	option native_api_port '9527'
+	option block_https_rr '1'
+	option ad_block '1'
+	option ad_block_file '/etc/honk_new/adblock.list'
+	# 每项一个 URL；geosite.dat 表示用内置分类
+	list ad_block_source 'geosite.dat'
+	# DNS 单选：cn_dns / remote_dns 是预设，*_custom 非空时优先
+	option cn_dns 'udp://223.5.5.5:53'
+	option cn_dns_custom ''
+	option remote_dns 'https://dns.cloudflare.com/dns-query'
+	option remote_dns_custom ''
+
+# 节点：honk 的每个 node 就是一条分享链接
+config node 'sample'
+	option enabled '0'
+	option name 'sample'
+	option uri ''
+
+# 组：策略 + 成员。honk 的路由目标只能是 direct / block / 组。
+# 这个 proxy 是示例组，成员留空，装好后自己加节点再填。
+config group 'proxy'
+	option name 'proxy'
+	# urltest 按实测延迟自动挑最快的；score 依赖 check_url 探测，
+	# 而 gstatic 这类域名要先解析、解析又依赖代理，探测会永远失败，
+	# 最后回退到 final: direct，表现就是"节点都在但从头到尾不走代理"。
+	option policy 'urltest'
+	# 探测地址用 IP，不依赖 DNS。用域名会陷入同一个鸡生蛋。
+	option check_url 'http://1.1.1.1'
+	option tolerance '50'
+	option final 'block'
+
+# 订阅：下载后解析成节点，节点名会带上 tag 前缀
+config subscription 'example_sub'
+	option enabled '0'
+	option name 'sample'
+	option url ''
+	option tag 'sub'
+
+# 访问控制：按源/目标地址决定走代理还是直连
+config control 'control'
+	option lan_list_mode '0'
+
+# 域名分流：action = direct / proxy
+config domain_route 'example_route'
+	option enabled '0'
+	option name 'cn_direct'
+	option action 'direct'
+	list domains 'qq.com'
