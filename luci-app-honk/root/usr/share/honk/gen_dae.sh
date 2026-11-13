@@ -293,7 +293,9 @@ mkdir -p "$(dirname "$OUT")"
   if [ "$NATIVE_API" = "1" ]; then
     # 只监听回环 + 匿名访问，不开 config_write：够看延迟和切节点，
     # 不给 UI 改配置的权限。
+    # enabled 默认 false，不写这一行监听器根本不会启动（只写 listen 无效）。
     exp_inner="${exp_inner}    native_api {
+        enabled: true
         listen: '127.0.0.1:${API_PORT}'
         allow_anonymous_loopback: true
     }
