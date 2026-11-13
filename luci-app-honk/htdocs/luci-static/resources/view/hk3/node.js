@@ -192,29 +192,34 @@ return view.extend({
 		groupsSec.sectiontitle = function(section_id) {
 			return uci.get('honk', section_id, 'name') || section_id;
 		};
-		groupsSec.renderRow = function(section_id) {
-			var tr = form.GridSection.prototype.renderRow.apply(this, arguments);
+		// 正确的钩子是 renderRowActions(section_id, more_label, trEl)：
+		// GridSection 拼行时调它取「操作」那一格，再 append 到 tr 上。
+		// 之前覆盖的 renderRow 根本不存在，所以「应用」按钮一直没出现过。
+		groupsSec.renderRowActions = function(section_id) {
+			var td = form.GridSection.prototype.renderRowActions.apply(this, arguments);
 			var name = (uci.get('honk', section_id, 'name') || '').trim();
-			if (!name) return tr;
+			if (!name || !td) return td;
 
 			// 「应用」= 把这个组设成主分组。honk 没有单一主节点，路由目标是组。
-			var td = E('td', { 'class': 'td cbi-section-actions' }, E('button', {
+			var actionBtn = E('button', {
 				'class': 'btn cbi-button cbi-button-action',
-				'style': 'padding:2px 10px;font-size:12px;',
+				'style': 'padding:2px 10px;font-size:12px;margin-right:4px;',
 				'click': ui.createHandlerFn(this, function(ev) {
 					ev.preventDefault();
 					uci.set('honk', 'config', 'main_group', name);
 					return uci.save().then(function() {
 						ui.addNotification(null, E('p', {}, _('主分组已设为 %s，保存并应用后生效。').format(name)), 'info');
-						var cell = td.querySelector('button');
-						if (cell) { cell.textContent = _('已应用'); cell.disabled = true; }
+						actionBtn.textContent = _('已应用');
+						actionBtn.disabled = true;
 					}).catch(function(e) {
 						ui.addNotification(null, E('p', {}, e.message), 'error');
 					});
 				})
-			}, (data.main === name) ? _('已应用') : _('应用')));
-			tr.appendChild(td);
-			return tr;
+			}, (data.main === name) ? _('已应用') : _('应用'));
+
+			var host = td.querySelector('div') || td;
+			host.insertBefore(actionBtn, host.firstChild);
+			return td;
 		};
 
 		o = groupsSec.option(form.Value, 'name', _('组名'));
@@ -342,7 +347,45 @@ return view.extend({
 			return uci.get('honk', section_id, 'name') || section_id;
 		};
 
-		o = subsSec.option(form.Flag, 'enabled', _('启用'));
+		// 内核按 tag（留空就用名称）给订阅起名字，这里按同一个键找回 provider id。
+		subsSec.renderRowActions = function(section_id) {
+			var td = form.GridSection.prototype.renderRowActions.apply(this, arguments);
+			var tag = (uci.get('honk', section_id, 'tag') || '').trim();
+			var name = (uci.get('honk', section_id, 'name') || '').trim();
+			var key = tag || name;
+			if (!key || !td) return td;
+
+			var actionBtn = E('button', {
+				'class': 'btn cbi-button',
+				'style': 'padding:2px 10px;font-size:12px;margin-right:4px;',
+				'click': ui.createHandlerFn(this, function(ev) {
+					ev.preventDefault();
+					if (actionBtn.disabled) return;
+					actionBtn.disabled = true;
+					actionBtn.textContent = _('更新中…');
+					hk3.providers().then(function(list) {
+						var hit = (list || []).filter(function(p) {
+							return p.kind !== 'inline' && (p.name === key || p.id === key);
+						})[0];
+						if (!hit) throw new Error(_('内核里还没有这条订阅，先点「保存并应用」'));
+						return hk3.api('provider-refresh', hit.id).then(hk3.waitOperation);
+					}).then(function() {
+						ui.addNotification(null, E('p', {}, _('订阅已更新：') + key), 'info');
+						actionBtn.textContent = _('已更新');
+					}).catch(function(e) {
+						ui.addNotification(null, E('p', {}, _('更新失败：') + e.message), 'error');
+						actionBtn.disabled = false;
+						actionBtn.textContent = _('更新');
+					});
+				})
+			}, _('更新'));
+
+			var host = td.querySelector('div') || td;
+			host.insertBefore(actionBtn, host.firstChild);
+			return td;
+		};
+
+	o = subsSec.option(form.Flag, 'enabled', _('启用'));
 		o.default = '1';
 		o.rmempty = false;
 
@@ -537,7 +580,32 @@ function mountTestAll(el) {
 		next();
 	});
 
+	// 按钮栏在 tab 外面，不跟着 tab 切换消失。这个按钮只对「节点」页有意义，
+	// 所以盯着顶层 tab 的选中状态，别的页藏起来。
+	var topMenu = Array.prototype.slice.call(el.querySelectorAll('.cbi-tabmenu'))
+		.filter(function(ul) {
+			return Array.prototype.some.call(ul.querySelectorAll('li a'), function(a) {
+				return a.textContent.trim() === _('节点');
+			});
+		})[0];
+
+	function syncVisibility() {
+		if (!topMenu) return;
+		var active = topMenu.querySelector('li.cbi-tab a');
+		btn.style.display = (active && active.textContent.trim() === _('节点')) ? '' : 'none';
+	}
+
+	if (topMenu) {
+		Array.prototype.forEach.call(topMenu.querySelectorAll('li a'), function(a) {
+			a.addEventListener('click', function() {
+				// LuCI 在点击里改 li 的 class，等它改完再读
+				window.setTimeout(syncVisibility, 0);
+			});
+		});
+	}
+
 	actions.insertBefore(btn, actions.firstChild);
+	syncVisibility();
 }
 
 function subLabel(p, i) {
