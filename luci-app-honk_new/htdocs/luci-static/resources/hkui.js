@@ -110,6 +110,53 @@ function fullRow(node) {
 
 /* 已生效的原生订阅。honk 自己解析订阅，这里只展示内核的实际状态，
    不重复前端那套下载/解析逻辑。 */
+/*
+ * 顶部运行状态条。三个页面都要有，所以放在共用模块里，
+ * 位置照 HomeProxy —— 挂在副标题（.cbi-map-descr）下面，不是页面最顶上。
+ */
+function mountStatusBanner(el) {
+	var banner = E('div', {
+		'style': 'padding:8px 0;margin:0 0 10px;font-weight:600;font-size:14px;' +
+		         'font-style:italic;color:#d9534f;border-bottom:1px solid #ddd;'
+	}, _('正在读取 honk 状态…'));
+
+	function refresh() {
+		return fs.exec('/usr/share/honk_new/honk-status.sh').then(function(res) {
+			var parts = String(res.stdout || '').trim().split('|');
+			var state = parts[0] || 'missing';
+			var ver = (parts[1] || '').trim();
+			var label = ver ? 'honk-core ' + ver : 'honk-core';
+
+			if (state === 'running') {
+				banner.style.color = '#19be6b';
+				banner.textContent = label + ' ' + _('运行中');
+			} else if (state === 'stopped') {
+				banner.style.color = '#ed4014';
+				banner.textContent = label + ' ' + _('未运行');
+			} else {
+				banner.style.color = '#ff9900';
+				banner.textContent = _('honk-core 未安装');
+			}
+		}).catch(function(e) {
+			banner.style.color = '#ff9900';
+			banner.textContent = _('无法读取状态：') + e;
+		});
+	}
+
+	refresh();
+	poll.add(refresh, 10);
+
+	var anchor = el.querySelector('.cbi-map-descr');
+	if (anchor && anchor.nextSibling)
+		el.insertBefore(banner, anchor.nextSibling);
+	else if (anchor)
+		el.appendChild(banner);
+	else
+		el.insertBefore(banner, el.firstChild);
+
+	return banner;
+}
+
 function renderProviders() {
 	var box = E('div', { style: 'line-height:1.8' }, _('正在读取已生效订阅…'));
 
@@ -353,4 +400,5 @@ function renderApplyStatus() {
 
 return baseclass.extend({ api: api, nodes: function() { return page('nodes'); }, providers: function() { return page('providers'); },
 	waitOperation: waitOperation, health: health, renderConnection: renderConnection,
-	renderProviders: renderProviders, renderPicking: renderPicking, reload: reload, renderApplyStatus: renderApplyStatus });
+	renderProviders: renderProviders, renderPicking: renderPicking, reload: reload, renderApplyStatus: renderApplyStatus,
+	mountStatusBanner: mountStatusBanner });

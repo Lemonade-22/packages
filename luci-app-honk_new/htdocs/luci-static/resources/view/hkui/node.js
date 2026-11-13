@@ -279,7 +279,10 @@ return view.extend({
 		o.rawhtml = true;
 		o.cfgvalue = function() { return hkui.renderProviders(); };
 
-		return m.render();
+		return m.render().then(function(el) {
+			hkui.mountStatusBanner(el);
+			return el;
+		});
 	}
 });
 

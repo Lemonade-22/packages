@@ -632,6 +632,9 @@ return view.extend({
 			'l4proto(udp) && dport(443) -> block',
 			'fallback: proxy'
 		].join('\n');
-		return m.render();
+		return m.render().then(function(el) {
+			hkui.mountStatusBanner(el);
+			return el;
+		});
 	}
 });
