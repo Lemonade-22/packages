@@ -294,11 +294,17 @@ mkdir -p "$(dirname "$OUT")"
     # 只监听回环 + 匿名访问，不开 config_write：够看延迟和切节点，
     # 不给 UI 改配置的权限。
     # enabled 默认 false，不写这一行监听器根本不会启动（只写 listen 无效）。
-    exp_inner="${exp_inner}    native_api {
-        enabled: true
+    api_inner="        enabled: true
         listen: '127.0.0.1:${API_PORT}'
         allow_anonymous_loopback: true
-    }
+"
+    # doona 装了就把 ui 指过去；ui 只接受含 index.html 的本地目录。
+    if [ -f /usr/share/doona/index.html ]; then
+        api_inner="${api_inner}        ui: '/usr/share/doona'
+"
+    fi
+    exp_inner="${exp_inner}    native_api {
+${api_inner}    }
 "
   fi
   if [ -n "$exp_inner" ]; then
