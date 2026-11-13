@@ -16,7 +16,8 @@ if [ -z "$BIN" ]; then
 	exit 0
 fi
 
-VER="$($BIN --version 2>/dev/null | head -n 1 | tr -d '\r')"
+# 只取纯版本号（去掉 "honk-core " 前缀），前端统一拼前缀，避免出现重复
+VER="$($BIN --version 2>/dev/null | head -n 1 | tr -d '\r' | sed 's/^[^ ]* *//')"
 
 if pgrep -f "$(basename "$BIN")" >/dev/null 2>&1; then
 	echo "running|$VER"
