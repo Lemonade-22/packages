@@ -39,6 +39,7 @@ geo_dir() {
 prepare_data_dir() {
 	local d
 	d="$(data_dir)"
+	mkdir -p /etc/honk 2>/dev/null
 	mkdir -p "$d/state"
 	# honk 会拒绝 group/other 可写的 state 目录，直接拒绝启动
 	chmod 700 "$d" "$d/state" 2>/dev/null
