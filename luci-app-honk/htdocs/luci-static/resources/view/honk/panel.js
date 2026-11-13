@@ -565,7 +565,10 @@ return view.extend({
 				return uci.get('honk', 'infra', key + '_custom') || (v && v !== 'custom' && !choices[v] ? v : '');
 			};
 			custom.write = function(id, value) { uci.set('honk', 'infra', key + '_custom', value); };
-			custom.validate = function(id, value) { return /^(udp|tcp|tls|https):\/\//.test(value) || _('请输入完整 DNS URI'); };
+			// 正则里不要写转义的斜杠对：luci.mk 打包时的 minifier 会把它当成行注释，
+  // 从那里一直截到行尾，产出的 panel.js 报 Invalid regular expression flags。
+  // 用 [/][/] 表达同样的意思，minifier 不会误判。
+  custom.validate = function(id, value) { return /^(udp|tcp|tls|https):[/][/]/.test(value) || _('请输入完整 DNS URI'); };
 		});
 
 		/* ---- 高级 ---- */
