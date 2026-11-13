@@ -1105,16 +1105,26 @@ return view.extend({
 		o.cfgvalue = function() {
 			var box = E('div', { 'style': 'line-height:1.8' }, _('正在检测…'));
 
-			function line(color, label, href, extra) {
+			// 面板入口做成按钮，不把地址裸露出来
+			function panelButton(label, href) {
+				var btn = E('button', {
+					'class': 'btn cbi-button cbi-button-action',
+					'style': 'margin-left:10px'
+				}, label);
+				btn.addEventListener('click', function(ev) {
+					ev.preventDefault();
+					window.open(href, '_blank', 'noopener,noreferrer');
+				});
+				return btn;
+			}
+
+			function line(color, label, btnLabel, href, extra) {
 				var parts = [ E('span', { 'style': 'color:' + color + ';font-weight:600' }, label) ];
 				if (href)
-					parts.push('  ', E('a', {
-						'href': href, 'target': '_blank', 'rel': 'noreferrer noopener',
-						'style': 'word-break:break-all'
-					}, href));
+					parts.push(panelButton(btnLabel, href));
 				if (extra)
-					parts.push('  ', extra);
-				return E('p', { 'style': 'margin:0' }, parts);
+					parts.push('  ', E('span', { 'style': 'color:#888' }, extra));
+				return E('p', { 'style': 'margin:0;display:flex;align-items:center;flex-wrap:wrap;gap:6px' }, parts);
 			}
 
 			function check() {
@@ -1126,28 +1136,28 @@ return view.extend({
 					box.innerHTML = '';
 					switch (kind) {
 					case 'doona':
-						box.appendChild(line('#19be6b', _('doona 已安装'), url));
+						box.appendChild(line('#19be6b', _('doona 已安装'), _('Doona'), url));
 						break;
 					case 'zashboard':
-						box.appendChild(line('#19be6b', _('zashboard 已安装'), url));
+						box.appendChild(line('#19be6b', _('zashboard 已安装'), _('Zashboard'), url));
 						break;
 					case 'metacubexd':
-						box.appendChild(line('#19be6b', _('metacubexd 已安装'), url));
+						box.appendChild(line('#19be6b', _('metacubexd 已安装'), _('MetaCubeXD'), url));
 						break;
 					case 'yacd':
-						box.appendChild(line('#19be6b', _('yacd 已安装'), url));
+						box.appendChild(line('#19be6b', _('yacd 已安装'), _('YACD'), url));
 						break;
 					case 'doona-installed':
-						box.appendChild(line('#ff9900', _('doona 已安装'), url,
+						box.appendChild(line('#ff9900', _('doona 已安装'), _('Doona'), url,
 							_('honk 没在运行，点开是空的。')));
 						break;
 					case 'nopanel':
-						box.appendChild(line('gray', _('没有 Web 面板'),
-							null, _('装了 doona 或 zashboard 后这里会出现入口。')));
+						box.appendChild(line('gray', _('没有 Web 面板'), null, null,
+							_('装了 doona 或 zashboard 后这里会出现入口。')));
 						break;
 					default:
-						box.appendChild(line('gray', _('无法检测'),
-							null, _('honk-core 没在运行，或者 native API 没开。')));
+						box.appendChild(line('gray', _('无法检测'), null, null,
+							_('honk-core 没在运行，或者 native API 没开。')));
 					}
 
 					// 两个面板都装的情况很少，但装了就把另一个也列出来
