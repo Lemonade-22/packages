@@ -209,6 +209,10 @@ $(ip -6 -o addr show scope global 2>/dev/null | awk '{print $4}' | cut -d/ -f1)"
     fi
     # 只影响"全局"档位：direct 让 v6 整体直连，block_global 让 v6 整体断开。
     # 两者都必须压在最前，否则会被下面的 geosite-cn / geoip-cn 抢先。
+    # 回环先放行。resolv.conf 里同时有 127.0.0.1 和 ::1，客户端挑到 ::1 时
+    # 如果被下面的 ipversion(6) 规则拦掉，表现是"某些站点解析超时、另一些正常"，
+    # 极难查。本机回环永远不该受 v6 策略影响。
+    echo "    dip(::1) -> direct(must)"
     case "$IPV6_MODE" in
       direct)       echo "    ipversion(6) -> direct" ;;
       block_global) echo "    ipversion(6) -> block" ;;
@@ -237,7 +241,8 @@ $(ip -6 -o addr show scope global 2>/dev/null | awk '{print $4}' | cut -d/ -f1)"
     esac
     # 这一档故意排在 geosite/geoip 之后：CN 的 v6 先被直连规则接住，
     # 只有非 CN 的 v6 落到这里被阻断。想一个不留就用 block_global。
-    [ "$IPV6_MODE" = "block" ] && echo "    ipversion(6) -> block"
+    # 同上：回环必须在 v6 策略之前放行
+  [ "$IPV6_MODE" = "block" ] && printf '%s\n' "    dip(::1) -> direct(must)" "    ipversion(6) -> block"
 
     # 域名分流：一条规则一个 section，domains 是 UCI list
     for s in $(sections domain_route); do
