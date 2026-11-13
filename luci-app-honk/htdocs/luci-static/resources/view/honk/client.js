@@ -1146,6 +1146,44 @@ return view.extend({
 			'fallback: proxy'
 		].join('\n');
 
-		return m.render();
+		
+		/* 顶部运行状态条，照 HomeProxy 的做法：先判断有没有装、有没有在跑，
+		   再决定文字和颜色。没装的时候提示去装，而不是空着。 */
+		var _statusBanner = E('div', {
+			'style': 'padding:10px 14px;margin:0 0 12px;border-radius:4px;' +
+			         'font-weight:600;font-size:14px;background:#f6f6f6;color:#555;'
+		}, _('正在读取 honk 状态…'));
+
+		function refreshBanner() {
+			return fs.exec('/usr/share/honk/honk-status.sh').then(function(res) {
+				var line = String(res.stdout || '').trim();
+				var parts = line.split('|');
+				var state = parts[0] || 'missing';
+				var ver = (parts[1] || '').trim();
+				var label = ver ? 'honk-core ' + ver : 'honk-core';
+
+				if (state === 'running') {
+					_statusBanner.style.color = '#19be6b';
+					_statusBanner.textContent = label + ' ' + _('运行中');
+				} else if (state === 'stopped') {
+					_statusBanner.style.color = '#ed4014';
+					_statusBanner.textContent = label + ' ' + _('未运行');
+				} else {
+					_statusBanner.style.color = '#ff9900';
+					_statusBanner.textContent = _('honk-core 未安装');
+				}
+			}).catch(function(e) {
+				_statusBanner.style.color = '#ff9900';
+				_statusBanner.textContent = _('无法读取状态：') + e;
+			});
+		}
+
+		refreshBanner();
+		poll.add(refreshBanner, 10);
+
+		return m.render().then(function(el) {
+			el.insertBefore(_statusBanner, el.firstChild);
+			return el;
+		});
 	}
 });

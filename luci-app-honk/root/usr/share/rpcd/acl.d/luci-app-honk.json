@@ -35,6 +35,9 @@
 				],
 				"/usr/share/honk/honk-api.sh": [
 					"exec"
+				],
+				"/usr/share/honk/honk-status.sh": [
+					"exec"
 				]
 			},
 			"ubus": {
