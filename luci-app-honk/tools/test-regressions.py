@@ -27,6 +27,16 @@ with tempfile.TemporaryDirectory(prefix="honk-test-") as tmp:
     cfg.mkdir()
     output = base / "config.dae"
     env = dict(os.environ, UCI_CONFIG_DIR=str(cfg))
+    shell = ["sh"]
+    if os.environ.get("HONK_TEST_BUSYBOX"):
+        busybox = shutil.which("busybox")
+        assert busybox, "Install busybox to run compatibility checks"
+        applets = base / "busybox-bin"
+        applets.mkdir()
+        for name in ("awk", "tr"):
+            (applets / name).symlink_to(busybox)
+        env["PATH"] = str(applets) + ":" + env["PATH"]
+        shell = [busybox, "sh"]
     def reset():
         (cfg / "honk").write_text((ROOT / "root/etc/config/honk").read_text())
         setval("config.enabled", "1")
@@ -36,7 +46,7 @@ with tempfile.TemporaryDirectory(prefix="honk-test-") as tmp:
         assert r.returncode == 0, r.stderr
         run(["uci", "-c", str(cfg), "commit", "honk"], check=True)
     def generate(ok=True):
-        r = run(["sh", str(scripts / "gen_dae.sh"), str(output)], env=env)
+        r = run(shell + [str(scripts / "gen_dae.sh"), str(output)], env=env)
         assert (r.returncode == 0) == ok, r.stderr
         return output.read_text() if output.exists() else ""
     reset()
@@ -71,6 +81,30 @@ with tempfile.TemporaryDirectory(prefix="honk-test-") as tmp:
     generate(False)
     assert output.read_bytes() == old, "Invalid config replaced working output"
     print("PASS: generator defaults, IPv6 modes, SSID, custom rules, subscriptions, invalid-config preservation")
+
+    # Use the complete generator: preserve domain bytes, reject empty labels,
+    # retain the unterminated final line and split rules at 40 domains.
+    reset()
+    adlist = base / "dns-adblock.list"
+    valid = ["0.myikas.com", "0.net.easyjet.com", "spaces.example.com"] + [f"ad{i}.example.org" for i in range(79)]
+    bad = ["bad.", ".bad", "bad..example.com", "bad name.example", "singlelabel", "bad/example.com"]
+    adlist.write_bytes((" \t" + valid[0] + "\r\n" + "\n".join(valid[1:-1] + bad + ["# comment", "", valid[-1]])).encode())
+    setval("infra.ad_block_file", str(adlist))
+    text = generate()
+    import re
+    rules = re.findall(r"qname\((suffix: .*?)\) -> reject", text)
+    actual = [domain for rule in rules for domain in re.findall(r"suffix: ([^, ]+)", rule)]
+    assert actual == valid, (actual, valid)
+    assert [rule.count("suffix:") for rule in rules] == [40, 40, 2]
+    print("PASS: adblock domain preservation, malformed labels, CRLF, final line and 40-entry batching")
+
+    large = [f"spaces{i}.example.com" for i in range(100000)]
+    adlist.write_text("\n".join(large))
+    text = generate()
+    actual = re.findall(r"suffix: (spaces[0-9]+\.example\.com)", text)
+    assert actual == large
+    assert len(re.findall(r"qname\(suffix: spaces", text)) == 2500
+    print("PASS: 100,000 domains retained in 2,500 rules")
 
     # Exercise real adblock filter and replacement with deterministic local downloads.
     mock = base / "bin"

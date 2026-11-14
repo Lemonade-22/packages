@@ -6,7 +6,7 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=luci-app-honk
 PKG_VERSION:=20261113
-PKG_RELEASE:=7
+PKG_RELEASE:=8
 
 LUCI_TITLE:=LuCI for honk - eBPF transparent proxy (新界面)
 # Release 工作流会注入 honk-core；单独源码构建需自行提供兼容内核。

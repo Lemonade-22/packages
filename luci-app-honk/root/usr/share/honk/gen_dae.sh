@@ -331,34 +331,23 @@ mkdir -p "$(dirname "$OUT")" || exit 1
     # 自定义列表：一行一个域名，按后缀匹配。规则一行不能无限长，
     # 所以按 40 个一组拆成多条。
     if [ -s "$AB_FILE" ]; then
-      ab_batch=""
-      ab_n=0
-      while IFS= read -r ab_d; do
-        # 不能用 tr -d '[:space:]'：busybox 的 tr 不展开这个字符类，
-        # 它会按字面把 [ : s p a c e ] 这些字符删掉，
-        # 0.myikas.com 就变成 0.myik.om，域名全废。
-        ab_d="$(printf '%s' "$ab_d" | tr -d ' \t\r')"
-        case "$ab_d" in ''|'#'*) continue ;; esac
-        # 空后缀会让内核拒绝整份配置（DNS policy contains an empty suffix
-        # domain matcher），整台机器就起不来。只放行看起来是域名的条目。
-        case "$ab_d" in
-          .*|*.|*[!A-Za-z0-9._-]*) continue ;;
-          *.*) ;;
-          *) continue ;;
-        esac
-        if [ -z "$ab_batch" ]; then
-          ab_batch="suffix: $ab_d"
-        else
-          ab_batch="$ab_batch, suffix: $ab_d"
-        fi
-        ab_n=$((ab_n + 1))
-        if [ "$ab_n" -ge 40 ]; then
-          echo "            qname($ab_batch) -> reject"
-          ab_batch=""
-          ab_n=0
-        fi
-      done < "$AB_FILE"
-      [ -n "$ab_batch" ] && echo "            qname($ab_batch) -> reject"
+      # One awk process for the entire list; no tr character-class dependency.
+      # Trim only boundary whitespace: never turn a malformed name into another domain.
+      LC_ALL=C awk '
+        {
+          sub(/^[ \t\r]+/, "")
+          sub(/[ \t\r]+$/, "")
+          if ($0 == "" || $0 ~ /^#/ || $0 !~ /\./ ||
+              $0 ~ /(^\.|\.$|\.\.)/ || $0 ~ /[^A-Za-z0-9._-]/)
+            next
+          batch = batch (n ? ", " : "") "suffix: " $0
+          if (++n == 40) {
+            print "            qname(" batch ") -> reject"
+            batch = ""; n = 0
+          }
+        }
+        END { if (n) print "            qname(" batch ") -> reject" }
+      ' "$AB_FILE"
     fi
   fi
   [ "$BLOCK_HTTPS" = "1" ] && echo "            qtype(https,svcb) -> reject"
