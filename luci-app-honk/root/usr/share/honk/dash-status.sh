@@ -9,7 +9,7 @@
 # 输出 "类型|地址"，前端据此渲染成可点链接。
 set -u
 
-# 有些固件里 ipaddr 带掩码（192.168.10.1/24），拼 URL 前要剥掉
+# 有些固件里 ipaddr 带掩码（192.168.1.1/24），拼 URL 前要剥掉
 LANIP="$(uci -q get network.lan.ipaddr | sed 's|/.*||')"
 [ -n "$LANIP" ] || LANIP="127.0.0.1"
 

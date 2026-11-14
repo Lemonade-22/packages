@@ -203,7 +203,7 @@ honk/client 改成了 honk/panel。
 
 ## 五、当前状态
 
-在 某设备（qualcommax/ipq60xx，内核 6.18.60，ImmortalWRT SNAPSHOT）上：
+在 qualcommax/ipq60xx 设备（ImmortalWRT SNAPSHOT）上：
 
 | 项目 | 状态 |
 | --- | --- |
@@ -234,7 +234,7 @@ node.name = url.fragment().map(percent_decode_str)
 ```
 
 VMess 取 `ps`，其他取 `#` 后那段，URL 解码——跟导入脚本用的是同一个字段。
-所以 `filter: name('某节点名')` 能匹配上订阅解析出来的节点。
+所以 `filter: name('某个节点名片段')` 能匹配上订阅解析出来的节点。
 
 **二、组为空时的后果比想象中轻。** 用官方 beta.6 二进制在 mock 模式跑：
 

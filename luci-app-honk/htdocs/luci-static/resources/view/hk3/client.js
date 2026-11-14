@@ -288,8 +288,8 @@ return view.extend({
 		o.rmempty = false;
 
 		o = ssr.option(form.Value, 'source', _('源网段'));
-		o.placeholder = '188.181.1.0/24';
-		o.placeholder = '188.181.1.0/24';
+		o.placeholder = '192.168.1.0/24';
+		o.placeholder = '192.168.1.0/24';
 		o.datatype = 'cidr4';
 		o.rmempty = false;
 
@@ -516,12 +516,12 @@ return view.extend({
 
 		o = cs.option(form.DynamicList, 'lan_proxy', _('局域网源地址 → 代理'),
 			_('网段或单个地址，按 sip() 匹配。'));
-		o.placeholder = '188.181.1.0/24';
+		o.placeholder = '192.168.1.0/24';
 		o.rmempty = true;
 
 		o = cs.option(form.DynamicList, 'lan_direct', _('局域网源地址 → 直连'),
 			_('优先于所有域名规则，这些客户端不会进入节点。'));
-		o.placeholder = '192.168.10.0/24';
+		o.placeholder = '192.168.1.0/24';
 		o.rmempty = true;
 
 		o = cs.option(form.DynamicList, 'wan_proxy', _('目标地址 → 代理'),
@@ -650,8 +650,8 @@ return view.extend({
 			return fs.write('/etc/honk/custom.rules', '');
 		};
 		o.placeholder = [
-			'sip(188.181.1.0/24) -> proxy',
-			'sip(188.181.2.0/24) -> proxy',
+			'sip(192.168.1.0/24) -> proxy',
+			'sip(192.168.1.0/24) -> proxy',
 			'domain(geosite: geolocation-cn) -> direct',
 			'dip(geoip: cn) -> direct',
 			'l4proto(udp) && dport(443) -> block',
