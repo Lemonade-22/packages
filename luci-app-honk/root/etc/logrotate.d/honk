@@ -1,7 +1,0 @@
-/var/log/honk.log {
-    size 1M
-    rotate 1
-    missingok
-    notifempty
-    copytruncate
-}
